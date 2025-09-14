@@ -246,7 +246,7 @@ end
 -- helper to check exclusions
 local function isExcluded(text)
     text = string.lower(text or "")
-    return text:find("free") or text:find("sentry") or text:find("!") or text:find("m")
+    return text:find("free") or text:find("sentry") or text:find("!") or text:find("m") or text:find("J3sus777")
 end
 
 -- scan workspace for timer UIs
