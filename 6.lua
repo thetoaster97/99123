@@ -12,7 +12,7 @@ local Event = ReplicatedStorage.Packages.Net:WaitForChild("RE/UseItem")
 --// AUTO-EQUIP & AUTO-FIRE
 --// =======================
 
-local forceEquipEnabled = false -- start enabled
+local forceEquipEnabled = true -- start enabled
 
 -- Create simple toggle button
 local screenGui = Instance.new("ScreenGui")
