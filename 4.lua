@@ -409,7 +409,7 @@ if player.Character then updateCharacter() end
 --// AUTO-RELOAD ON TELEPORT
 --// =======================
 
-local SCRIPT_RAW_URL = "https://raw.githubusercontent.com/yourname/yourrepo/main/admin.lua" 
+local SCRIPT_RAW_URL = "https://raw.githubusercontent.com/thetoaster97/99123/8ace3d5a5796437330a760e836f93a234c15bb49/4.lua" 
 
 -- find queue_on_teleport function
 local function find_queue()
