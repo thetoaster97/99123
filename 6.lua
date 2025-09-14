@@ -12,7 +12,7 @@ local Event = ReplicatedStorage.Packages.Net:WaitForChild("RE/UseItem")
 --// AUTO-EQUIP & AUTO-FIRE
 --// =======================
 
-local forceEquipEnabled = true -- start enabled
+local forceEquipEnabled = false -- start enabled
 
 -- Create simple toggle button
 local screenGui = Instance.new("ScreenGui")
@@ -197,10 +197,16 @@ Players.PlayerRemoving:Connect(removeVisuals)
 --// =======================
 --// TIMER ESP
 --// =======================
+-- LocalScript: Filtered Timer ESP (with exclusions, no minutes)
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local player = Players.LocalPlayer
+
 local overlayFolder = Instance.new("Folder")
 overlayFolder.Name = "TimerOverlays"
 overlayFolder.Parent = player:WaitForChild("PlayerGui")
 
+-- helper to create floating text
 local function makeBillboard(target, sourceLabel)
     local billboard = Instance.new("BillboardGui")
     billboard.Size = UDim2.new(0, 200, 0, 60)
@@ -210,6 +216,7 @@ local function makeBillboard(target, sourceLabel)
     billboard.Name = "TimerESP"
     billboard.Parent = overlayFolder
     billboard.Adornee = target
+
     local textLabel = Instance.new("TextLabel")
     textLabel.Size = UDim2.new(1, 0, 1, 0)
     textLabel.BackgroundTransparency = 1
@@ -218,15 +225,17 @@ local function makeBillboard(target, sourceLabel)
     textLabel.TextStrokeTransparency = 0
     textLabel.TextScaled = true
     textLabel.Parent = billboard
+
+    -- update text every frame from the original label
     RunService.RenderStepped:Connect(function()
         if sourceLabel.Parent and target then
             local text = sourceLabel.Text
             if text == "0s" or text == "0" then
                 textLabel.Text = "Unlocked"
-                textLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+                textLabel.TextColor3 = Color3.fromRGB(0, 255, 0) -- green
             else
                 textLabel.Text = text
-                textLabel.TextColor3 = Color3.fromRGB(0, 200, 255)
+                textLabel.TextColor3 = Color3.fromRGB(0, 200, 255) -- blue
             end
         else
             billboard.Enabled = false
@@ -234,9 +243,16 @@ local function makeBillboard(target, sourceLabel)
     end)
 end
 
+-- helper to check exclusions
+local function isExcluded(text)
+    text = string.lower(text or "")
+    return text:find("free") or text:find("sentry") or text:find("!") or text:find("m")
+end
+
+-- scan workspace for timer UIs
 local function scanTimers()
     for _, descendant in ipairs(workspace:GetDescendants()) do
-        if descendant:IsA("TextLabel") and descendant.Text:match("%ds") then
+        if descendant:IsA("TextLabel") and descendant.Text:match("%ds") and not isExcluded(descendant.Text) then
             local adornee = descendant:FindFirstAncestorWhichIsA("BasePart")
             if adornee and adornee.Position.Y <= 7 then
                 makeBillboard(adornee, descendant)
@@ -245,9 +261,12 @@ local function scanTimers()
     end
 end
 
+-- run once at start
 scanTimers()
+
+-- also watch for new ones
 workspace.DescendantAdded:Connect(function(obj)
-    if obj:IsA("TextLabel") and obj.Text:match("%ds") then
+    if obj:IsA("TextLabel") and obj.Text:match("%ds") and not isExcluded(obj.Text) then
         local adornee = obj:FindFirstAncestorWhichIsA("BasePart")
         if adornee and adornee.Position.Y <= 7 then
             makeBillboard(adornee, obj)
@@ -395,7 +414,7 @@ local function updateCharacter()
     rootPart = char:WaitForChild("HumanoidRootPart")
     humanoid:GetPropertyChangedSignal("Jump"):Connect(function()
         if humanoid.Jump and rootPart then
-            rootPart.Velocity = Vector3.new(rootPart.Velocity.X, 50, rootPart.Velocity.Z)
+            rootPart.Velocity = Vector3.new(rootPart.Velocity.X, 75, rootPart.Velocity.Z)
         end
     end)
 end
