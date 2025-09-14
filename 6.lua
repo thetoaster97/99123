@@ -552,3 +552,91 @@ hopButton.MouseButton1Click:Connect(function()
 end)
 
 print("✅ ServerHop button loaded.")
+
+--// =======================
+--// BEE ATTACK INVERSE CONTROLS (Timed + Camera Lock)
+--// =======================
+local camera = workspace.CurrentCamera
+local inverseActive = false
+local bodyVelocity
+local heartbeatConnection
+
+local INVERSE_DURATION = 5.05 -- seconds
+local originalCameraType, originalCameraSubject, originalFOV
+
+-- Enable inverse controls
+local function enableInverseControls(character)
+    local humanoid = character:WaitForChild("Humanoid")
+    local rootPart = character:WaitForChild("HumanoidRootPart")
+
+    if bodyVelocity then bodyVelocity:Destroy() end
+    bodyVelocity = Instance.new("BodyVelocity")
+    bodyVelocity.MaxForce = Vector3.new(4000, 0, 4000)
+    bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+    bodyVelocity.Parent = rootPart
+
+    heartbeatConnection = RunService.Heartbeat:Connect(function()
+        if humanoid and humanoid.Parent and rootPart and rootPart.Parent then
+            if humanoid.MoveDirection.Magnitude > 0 then
+                local inverseMove = -humanoid.MoveDirection * humanoid.WalkSpeed
+                bodyVelocity.Velocity = Vector3.new(inverseMove.X, 0, inverseMove.Z)
+            else
+                bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+            end
+
+            -- Keep camera stable
+            camera.CameraType = originalCameraType
+            camera.CameraSubject = originalCameraSubject
+            camera.FieldOfView = originalFOV
+        end
+    end)
+end
+
+-- Disable inverse controls
+local function disableInverseControls()
+    if heartbeatConnection then
+        heartbeatConnection:Disconnect()
+        heartbeatConnection = nil
+    end
+    if bodyVelocity then
+        bodyVelocity:Destroy()
+        bodyVelocity = nil
+    end
+    inverseActive = false
+    -- Restore camera
+    camera.CameraType = originalCameraType
+    camera.CameraSubject = originalCameraSubject
+    camera.FieldOfView = originalFOV
+end
+
+-- Hook into Bee Attack
+Event.OnClientEvent:Connect(function(action)
+    if action == "Bee Attack" then
+        if inverseActive then return end -- don’t stack
+        inverseActive = true
+        print("[Bee Attack] Inverting controls for "..INVERSE_DURATION.."s")
+
+        -- Save camera state
+        originalCameraType = camera.CameraType
+        originalCameraSubject = camera.CameraSubject
+        originalFOV = camera.FieldOfView
+
+        local character = player.Character
+        if character then
+            enableInverseControls(character)
+        end
+
+        -- Restore after time
+        task.delay(INVERSE_DURATION, function()
+            disableInverseControls()
+            print("[Bee Attack] Controls restored.")
+        end)
+    end
+end)
+
+-- Apply if respawn mid-effect
+player.CharacterAdded:Connect(function(character)
+    if inverseActive then
+        enableInverseControls(character)
+    end
+end)
