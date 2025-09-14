@@ -409,13 +409,15 @@ if player.Character then updateCharacter() end
 --// AUTO-RELOAD ON TELEPORT
 --// =======================
 
-local SCRIPT_RAW_URL = "https://raw.githubusercontent.com/thetoaster97/99123/refs/heads/main/5.lua"
+-- Lean Executor Bootstrap: Auto-load Admin Script on All Serverhops
+-- Place alongside your executor code
 
--- Find queue_on_teleport
+local ADMIN_RAW_URL = "https://raw.githubusercontent.com/thetoaster97/99123/refs/heads/main/5.lua" -- your raw admin script URL
+
+-- Find the queue_on_teleport function
 local function find_queue()
     if type(queue_on_teleport) == "function" then return queue_on_teleport end
     if syn and type(syn.queue_on_teleport) == "function" then return syn.queue_on_teleport end
-    if secure_load and type(secure_load.queue_on_teleport) == "function" then return secure_load.queue_on_teleport end
     if KRNL and type(KRNL.queue_on_teleport) == "function" then return KRNL.queue_on_teleport end
     for k,v in pairs(_G) do
         if type(v) == "function" and tostring(k):lower():find("queue_on_teleport") then
@@ -427,83 +429,57 @@ end
 
 local queue_func = find_queue()
 if not queue_func then
-    warn("[Bootstrap] queue_on_teleport API not detected. Teleport persistence unavailable.")
+    warn("[Bootstrap] queue_on_teleport API not found. Teleport persistence unavailable.")
     return
 end
 
-if not SCRIPT_RAW_URL or SCRIPT_RAW_URL == "" then
-    error("[Bootstrap] SCRIPT_RAW_URL is empty. Put your raw script script URL in SCRIPT_RAW_URL.")
+if not ADMIN_RAW_URL or ADMIN_RAW_URL == "" then
+    error("[Bootstrap] ADMIN_RAW_URL is empty. Put your raw admin script URL in ADMIN_RAW_URL.")
 end
 
--- Robust fetch + loader (runs immediately and on every teleport)
-local function loadAdminScript()
-    local function safeGet(u)
-        if syn and type(syn.request) == "function" then
-            local ok,res = pcall(function() return syn.request({Url=u, Method="GET"}).Body end)
-            if ok and res then return res end
+-- Minimal payload for serverhop
+local payload = [[
+local url = "]] .. ADMIN_RAW_URL .. [["
+local function fetchAndRun(u)
+    local httpFuncs = {syn and syn.request, http_request, request, function() return game.HttpGet end}
+    for _, f in ipairs(httpFuncs) do
+        if type(f) == "function" then
+            local ok, res = pcall(function() return f({Url=u, Method="GET"}).Body end)
+            if ok and res then
+                local fn = loadstring(res)
+                if fn then pcall(fn) end
+                return
+            end
         end
-        if type(http_request) == "function" then
-            local ok,res = pcall(function() return http_request({Url=u}).Body end)
-            if ok and res then return res end
-        end
-        if type(request) == "function" then
-            local ok,res = pcall(function() return request({Url=u}).Body end)
-            if ok and res then return res end
-        end
-        if type(game.HttpGet) == "function" then
-            local ok,res = pcall(function() return game:HttpGet(u) end)
-            if ok and res then return res end
-        end
-        local HttpService = game:GetService("HttpService")
-        local ok,res = pcall(function() return HttpService:GetAsync(u) end)
-        if ok and res then return res end
-        return nil
     end
-
-    local code = safeGet(SCRIPT_RAW_URL)
-    if code then
-        local fn = loadstring(code)
+    -- fallback using HttpService
+    local HttpService = game:GetService("HttpService")
+    local ok, res = pcall(function() return HttpService:GetAsync(u) end)
+    if ok and res then
+        local fn = loadstring(res)
         if fn then pcall(fn) end
-    else
-        warn("[Bootstrap] Failed to fetch admin script.")
     end
 end
+fetchAndRun(url)
+]]
 
--- Run immediately in this server
-loadAdminScript()
+-- Queue for all serverhops
+local ok, err = pcall(function() queue_func(payload) end)
+if ok then
+    print("[Bootstrap] Admin script queued efficiently for all serverhops.")
+else
+    warn("[Bootstrap] Failed to queue payload:", err)
+end
 
--- Queue again for all future serverhops
-queue_func([[
-    local SCRIPT_RAW_URL = "]]..SCRIPT_RAW_URL..[["
-    local function safeGet(u)
-        if syn and type(syn.request) == "function" then
-            local ok,res = pcall(function() return syn.request({Url=u, Method="GET"}).Body end)
-            if ok and res then return res end
-        end
-        if type(http_request) == "function" then
-            local ok,res = pcall(function() return http_request({Url=u}).Body end)
-            if ok and res then return res end
-        end
-        if type(request) == "function" then
-            local ok,res = pcall(function() return request({Url=u}).Body end)
-            if ok and res then return res end
-        end
-        if type(game.HttpGet) == "function" then
-            local ok,res = pcall(function() return game:HttpGet(u) end)
-            if ok and res then return res end
-        end
-        local HttpService = game:GetService("HttpService")
-        local ok,res = pcall(function() return HttpService:GetAsync(u) end)
-        if ok and res then return res end
-        return nil
-    end
-    local code = safeGet(SCRIPT_RAW_URL)
+-- Run immediately in current server (optional, lean)
+pcall(function()
+    local HttpService = game:GetService("HttpService")
+    local code = HttpService:GetAsync(ADMIN_RAW_URL)
     if code then
         local fn = loadstring(code)
         if fn then pcall(fn) end
     end
-]])
-print("[Bootstrap] Thelueckster script queued for all future serverhops.")
+end)
 
 --// =======================
 --// SERVERHOP BUTTON
