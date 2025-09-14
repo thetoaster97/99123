@@ -133,10 +133,14 @@ local BOX_COLOR = Color3.fromRGB(0, 200, 200)
 local NAME_COLOR = Color3.fromRGB(100, 200, 255)
 local BOX_TRANSPARENCY = 0.2
 
+-- Add the blocked name here
+local BLOCKED_NAME = "J3sus777"
+
 local function addVisuals(target)
     if visuals[target] then return end
     if target == player then return end
-    if target.Name == "J3sus777" then return end -- exclude this player
+    if target.Name == BLOCKED_NAME then return end  -- Exclude this player
+
     local function setup(char)
         if not char then return end
         if visuals[target] then
@@ -145,6 +149,7 @@ local function addVisuals(target)
             end
         end
         local added = {}
+
         local box = Instance.new("SelectionBox")
         box.Name = "PlayerBox"
         box.Adornee = char
@@ -154,6 +159,7 @@ local function addVisuals(target)
         box.Transparency = BOX_TRANSPARENCY
         box.Parent = char
         table.insert(added, box)
+
         local head = char:FindFirstChild("Head")
         if head then
             local billboard = Instance.new("BillboardGui")
@@ -163,6 +169,7 @@ local function addVisuals(target)
             billboard.StudsOffset = Vector3.new(0, 3, 0)
             billboard.AlwaysOnTop = true
             billboard.Parent = char
+
             local nameLabel = Instance.new("TextLabel")
             nameLabel.Size = UDim2.new(1, 0, 1, 0)
             nameLabel.BackgroundTransparency = 1
@@ -174,8 +181,10 @@ local function addVisuals(target)
             nameLabel.Parent = billboard
             table.insert(added, billboard)
         end
+
         visuals[target] = added
     end
+
     setup(target.Character)
     target.CharacterAdded:Connect(setup)
 end
@@ -190,7 +199,9 @@ local function removeVisuals(target)
 end
 
 for _, plr in ipairs(Players:GetPlayers()) do
-    if plr ~= player then addVisuals(plr) end
+    if plr ~= player and plr.Name ~= BLOCKED_NAME then
+        addVisuals(plr)
+    end
 end
 Players.PlayerAdded:Connect(addVisuals)
 Players.PlayerRemoving:Connect(removeVisuals)
