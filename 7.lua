@@ -133,16 +133,17 @@ local BOX_COLOR = Color3.fromRGB(0, 200, 200)
 local NAME_COLOR = Color3.fromRGB(100, 200, 255)
 local BOX_TRANSPARENCY = 0.2
 
--- Add the blocked name here
 local BLOCKED_NAME = "J3sus777"
 
 local function addVisuals(target)
     if visuals[target] then return end
     if target == player then return end
-    if target.Name == BLOCKED_NAME then return end  -- Exclude this player
+    if target.Name == BLOCKED_NAME then return end  -- Block this player
 
     local function setup(char)
         if not char then return end
+        if target.Name == BLOCKED_NAME then return end  -- Block again for character respawn
+
         if visuals[target] then
             for _, obj in ipairs(visuals[target]) do
                 if obj and obj.Parent then obj:Destroy() end
@@ -205,6 +206,7 @@ for _, plr in ipairs(Players:GetPlayers()) do
 end
 Players.PlayerAdded:Connect(addVisuals)
 Players.PlayerRemoving:Connect(removeVisuals)
+
 --// =======================
 --// TIMER ESP
 --// =======================
