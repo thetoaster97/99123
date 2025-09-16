@@ -640,3 +640,96 @@ player.CharacterAdded:Connect(function(character)
         enableInverseControls(character)
     end
 end)
+
+
+--// =======================
+--// MOBILE NOCLIP CAMERA BLOCK
+--// =======================
+do
+    local Players = game:GetService("Players")
+    local UserInputService = game:GetService("UserInputService")
+    local RunService = game:GetService("RunService")
+
+    local player = Players.LocalPlayer
+    local camera = workspace.CurrentCamera
+
+    -- Camera settings
+    local minZoom, maxZoom = 5, 25
+    local zoom = 12
+    local yaw, pitch = 0, 0
+    local rotationSensitivity = 0.5 -- Roblox-like drag sensitivity
+    local zoomSensitivity = 0.15    -- faster pinch zoom
+
+    -- Joystick area (ignore touches here)
+    local screenSize = camera.ViewportSize
+    local joystickArea = Rect.new(0, screenSize.Y - 250, 250, screenSize.Y) -- bottom-left 250x250 box
+
+    -- Disable Roblox default camera
+    camera.CameraType = Enum.CameraType.Scriptable
+
+    -- Helper: get root
+    local function getRoot()
+        local char = player.Character or player.CharacterAdded:Wait()
+        return char:WaitForChild("HumanoidRootPart")
+    end
+
+    -- Touch tracking
+    local touches = {}
+
+    local function isInJoystickArea(position: Vector2): boolean
+        return position.X >= joystickArea.Min.X
+            and position.X <= joystickArea.Max.X
+            and position.Y >= joystickArea.Min.Y
+            and position.Y <= joystickArea.Max.Y
+    end
+
+    UserInputService.TouchStarted:Connect(function(input)
+        if isInJoystickArea(input.Position) then return end
+        touches[input] = input.Position
+    end)
+
+    UserInputService.TouchEnded:Connect(function(input)
+        touches[input] = nil
+    end)
+
+    UserInputService.TouchMoved:Connect(function(input)
+        if not touches[input] then return end
+
+        local touchCount = 0
+        for _ in pairs(touches) do touchCount += 1 end
+
+        -- Single finger = rotate
+        if touchCount == 1 then
+            local delta = input.Delta
+            yaw -= delta.X * rotationSensitivity
+            pitch = math.clamp(pitch - delta.Y * rotationSensitivity, -80, 80)
+        end
+
+        -- Two fingers = zoom
+        if touchCount == 2 then
+            local active = {}
+            for t, _ in pairs(touches) do table.insert(active, t) end
+            if #active == 2 then
+                local oldDist = (touches[active[1]] - touches[active[2]]).Magnitude
+                local newDist = (active[1].Position - active[2].Position).Magnitude
+                local diff = newDist - oldDist
+                zoom = math.clamp(zoom - diff * zoomSensitivity, minZoom, maxZoom)
+            end
+        end
+
+        touches[input] = input.Position
+    end)
+
+    -- Camera update loop
+    RunService.RenderStepped:Connect(function()
+        local root = getRoot()
+        local headOffset = Vector3.new(0, 2, 0)
+
+        local rotation = CFrame.Angles(0, math.rad(yaw), 0) * CFrame.Angles(math.rad(pitch), 0, 0)
+        local camPos = root.Position + headOffset - rotation.LookVector * zoom
+
+        camera.CFrame = CFrame.new(camPos, root.Position + headOffset)
+    end)
+
+    print("✅ Mobile noclip camera active inside main script")
+end
