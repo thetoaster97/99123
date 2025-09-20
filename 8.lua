@@ -414,7 +414,7 @@ local function updateCharacter()
     rootPart = char:WaitForChild("HumanoidRootPart")
     humanoid:GetPropertyChangedSignal("Jump"):Connect(function()
         if humanoid.Jump and rootPart then
-            rootPart.Velocity = Vector3.new(rootPart.Velocity.X, 75, rootPart.Velocity.Z)
+            rootPart.Velocity = Vector3.new(rootPart.Velocity.X, 50, rootPart.Velocity.Z)
         end
     end)
 end
