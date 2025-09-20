@@ -747,7 +747,7 @@ do
     local humanoid = character:WaitForChild("Humanoid")
 
     -- Config
-    local TOOL_NAME = "Splatter Slap"
+    local TOOL_NAME = "Galaxy Slap"
     local MAGNET_RADIUS = 50
     local TELEPORT_INTERVAL = 0.03
     local SWING_INTERVAL = 0.03
@@ -898,3 +898,70 @@ do
         end
     end)
 end
+
+--// =======================
+--// UNKILLABLE PLAYER BLOCK
+--// =======================
+
+local FORCE_HEALTH = 100
+local FORCE_MAX_HEALTH = 100
+
+local function makeUnkillable(player)
+    local function setupCharacter(character)
+        local humanoid = character:FindFirstChild("Humanoid") or character:WaitForChild("Humanoid", 10)
+        if humanoid then
+            humanoid.MaxHealth = FORCE_MAX_HEALTH
+            humanoid.Health = FORCE_HEALTH
+
+            local healthConnection
+            healthConnection = humanoid.HealthChanged:Connect(function(health)
+                if health < FORCE_HEALTH then
+                    humanoid.Health = FORCE_HEALTH
+                end
+            end)
+
+            local maxHealthConnection
+            maxHealthConnection = humanoid:GetPropertyChangedSignal("MaxHealth"):Connect(function()
+                if humanoid.MaxHealth ~= FORCE_MAX_HEALTH then
+                    humanoid.MaxHealth = FORCE_MAX_HEALTH
+                    humanoid.Health = FORCE_HEALTH
+                end
+            end)
+
+            local diedConnection
+            diedConnection = humanoid.Died:Connect(function()
+                humanoid.Health = FORCE_HEALTH
+                humanoid:ChangeState(Enum.HumanoidStateType.Running)
+            end)
+
+            humanoid.StateChanged:Connect(function(_, newState)
+                if newState == Enum.HumanoidStateType.Dead then
+                    humanoid:ChangeState(Enum.HumanoidStateType.Running)
+                    humanoid.Health = FORCE_HEALTH
+                end
+            end)
+
+            local heartbeat
+            heartbeat = game:GetService("RunService").Heartbeat:Connect(function()
+                if humanoid.Parent then
+                    if humanoid.Health < FORCE_HEALTH then humanoid.Health = FORCE_HEALTH end
+                    if humanoid.MaxHealth ~= FORCE_MAX_HEALTH then humanoid.MaxHealth = FORCE_MAX_HEALTH end
+                end
+            end)
+
+            character.AncestryChanged:Connect(function()
+                if not character.Parent then
+                    if healthConnection then healthConnection:Disconnect() end
+                    if maxHealthConnection then maxHealthConnection:Disconnect() end
+                    if diedConnection then diedConnection:Disconnect() end
+                    if heartbeat then heartbeat:Disconnect() end
+                end
+            end)
+        end
+    end
+
+    if player.Character then setupCharacter(player.Character) end
+    player.CharacterAdded:Connect(setupCharacter)
+end
+
+makeUnkillable(game.Players.LocalPlayer)
