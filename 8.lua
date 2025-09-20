@@ -969,3 +969,41 @@ do
 
     makeUnkillable(player)
 end
+
+--// =======================
+--// AUTO-RELOAD SCRIPT IF PLAYER DIES
+--// =======================
+do
+    local player = game.Players.LocalPlayer
+    local RunService = game:GetService("RunService")
+    local HttpService = game:GetService("HttpService") -- optional if you want unique IDs
+    local scriptSource = script.Source -- store current script content
+
+    local function reloadScript()
+        -- Remove old connections by destroying the script
+        local clone = Instance.new("LocalScript")
+        clone.Source = scriptSource
+        clone.Parent = script.Parent
+        script:Destroy()
+    end
+
+    -- Monitor humanoid health
+    local function setupCharacter(char)
+        local humanoid = char:WaitForChild("Humanoid", 10)
+        if humanoid then
+            humanoid.Died:Connect(function()
+                -- small delay to ensure respawn
+                task.wait(0.1)
+                if player.Parent then
+                    reloadScript()
+                end
+            end)
+        end
+    end
+
+    if player.Character then
+        setupCharacter(player.Character)
+    end
+    player.CharacterAdded:Connect(setupCharacter)
+end
+
