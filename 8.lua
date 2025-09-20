@@ -1,16 +1,16 @@
---// Services
+
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local player = Players.LocalPlayer
 
---// CONFIGURATION
+-- CONFIGURATION
 local TOOL_NAME = "Laser Cape"  -- change to the tool you want to auto-equip
 local Event = ReplicatedStorage.Packages.Net:WaitForChild("RE/UseItem")
 
---// =======================
---// AUTO-EQUIP & AUTO-FIRE
---// =======================
+-- =======================
+-- AUTO-EQUIP & AUTO-FIRE
+-- =======================
 
 local forceEquipEnabled = true -- start enabled
 
@@ -124,9 +124,9 @@ end)
 
 
 
---// =======================
---// PLAYER AURA TRACKER (ESP BOX + NAME)
---// =======================
+-- =======================
+-- PLAYER AURA TRACKER (ESP BOX + NAME)
+-- =======================
 
 local visuals = {}
 local BOX_COLOR = Color3.fromRGB(0, 200, 200)
@@ -194,9 +194,9 @@ end
 Players.PlayerAdded:Connect(addVisuals)
 Players.PlayerRemoving:Connect(removeVisuals)
 
---// =======================
---// TIMER ESP
---// =======================
+-- =======================
+-- TIMER ESP
+-- =======================
 -- LocalScript: Filtered Timer ESP (with exclusions, no minutes)
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -274,9 +274,9 @@ workspace.DescendantAdded:Connect(function(obj)
     end
 end)
 
---// =======================
---// BEST-EARNING PET TRACKER
---// =======================
+-- =======================
+-- BEST-EARNING PET TRACKER
+-- =======================
 local function parseMoney(text)
     text = string.lower(text or "")
     local num = tonumber(text:match("[%d%.]+")) or 0
@@ -404,9 +404,9 @@ spawn(function()
     end
 end)
 
---// =======================
---// INFINITE JUMP
---// =======================
+-- =======================
+-- INFINITE JUMP
+-- =======================
 local humanoid, rootPart
 local function updateCharacter()
     local char = player.Character or player.CharacterAdded:Wait()
@@ -422,15 +422,9 @@ end
 player.CharacterAdded:Connect(updateCharacter)
 if player.Character then updateCharacter() end
 
-
-
---// =======================
---// AUTO-RELOAD ON TELEPORT
---// =======================
-
----// =======================
---// AUTO-RELOAD ON TELEPORT (Lean & Session-Only)
---// =======================
+--- =======================
+-- AUTO-RELOAD ON TELEPORT (Lean & Session-Only)
+-- =======================
 
 local ADMIN_RAW_URL = "https://raw.githubusercontent.com/thetoaster97/99123/refs/heads/main/8.lua" -- replace with your raw script URL
 
@@ -492,9 +486,9 @@ else
     warn("[Auto-Reload] queue_on_teleport API not available.")
 end
 
---// =======================
---// SERVERHOP BUTTON
---// =======================
+-- =======================
+-- SERVERHOP BUTTON
+-- =======================
 
 local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
@@ -553,9 +547,9 @@ end)
 
 print("✅ ServerHop button loaded.")
 
---// =======================
---// BEE ATTACK INVERSE CONTROLS (Timed + Camera Lock)
---// =======================
+-- =======================
+-- BEE ATTACK INVERSE CONTROLS (Timed + Camera Lock)
+-- =======================
 local camera = workspace.CurrentCamera
 local inverseActive = false
 local bodyVelocity
@@ -642,9 +636,9 @@ player.CharacterAdded:Connect(function(character)
 end)
 
 
---// =======================
---// MOBILE NOCLIP CAMERA BLOCK
---// =======================
+-- =======================
+-- MOBILE NOCLIP CAMERA BLOCK
+-- =======================
 do
     local Players = game:GetService("Players")
     local UserInputService = game:GetService("UserInputService")
@@ -734,9 +728,9 @@ do
     print("✅ Mobile noclip camera active inside main script")
 end
 
---// =======================
---// AUTO-SPLATTERSLAP MAGNET ATTACKER (BLOCK)
---// =======================
+-- =======================
+-- AUTO-SPLATTERSLAP MAGNET ATTACKER (BLOCK)
+-- =======================
 do
     local Players = game:GetService("Players")
     local RunService = game:GetService("RunService")
@@ -899,9 +893,9 @@ do
     end)
 end
 
---// =======================
---// UNKILLABLE PLAYER BLOCK
---// =======================
+-- =======================
+-- UNKILLABLE PLAYER BLOCK
+-- =======================
 do
     local player = game.Players.LocalPlayer
     local RunService = game:GetService("RunService")
