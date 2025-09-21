@@ -1055,19 +1055,20 @@ local backpack = player:WaitForChild("Backpack")
 
 local enabled = false -- starts off
 
--- Create toggle button above the Laser Cape button
+-- Reference existing GUI
 local screenGui = player:WaitForChild("PlayerGui"):FindFirstChild("AutoEquipToggleGui") or Instance.new("ScreenGui")
 screenGui.Name = "AutoEquipToggleGui"
 screenGui.ResetOnSpawn = false
 screenGui.Parent = player:WaitForChild("PlayerGui")
 
+-- Create toggle button under the existing Laser Cape button
 local toggleToolButton = Instance.new("TextButton")
-toggleToolButton.Size = UDim2.new(0, 150, 0, 50)
-toggleToolButton.Position = UDim2.new(0, 20, 0, -35) -- above existing Laser button
+toggleToolButton.Size = UDim2.new(0, 120, 0, 40) -- slightly smaller
+toggleToolButton.Position = UDim2.new(0, 20, 0, 75) -- below Laser Cape button (original at 20 + 50 height + 5 padding)
 toggleToolButton.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
 toggleToolButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 toggleToolButton.Font = Enum.Font.SourceSansBold
-toggleToolButton.TextSize = 18
+toggleToolButton.TextSize = 16
 toggleToolButton.Text = "Ultra Equip: OFF"
 toggleToolButton.Parent = screenGui
 
@@ -1075,6 +1076,15 @@ toggleToolButton.MouseButton1Click:Connect(function()
     enabled = not enabled
     toggleToolButton.Text = "Ultra Equip: " .. (enabled and "ON" or "OFF")
     toggleToolButton.BackgroundColor3 = enabled and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(150, 0, 0)
+
+    -- Apply to all existing players immediately when turned on
+    if enabled then
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= player then
+                removeLocalVisuals(plr)
+            end
+        end
+    end
 end)
 
 -- Function to get the tool reference
@@ -1107,7 +1117,7 @@ RunService.Stepped:Connect(function()
     end
 end)
 
--- Apply to existing players when enabled
+-- Apply to new players automatically
 Players.PlayerAdded:Connect(function(plr)
     plr.CharacterAdded:Connect(function()
         if plr ~= player and enabled then
@@ -1115,18 +1125,3 @@ Players.PlayerAdded:Connect(function(plr)
         end
     end)
 end)
-
--- Apply to existing players immediately when toggled on
-toggleToolButton.MouseButton1Click:Connect(function()
-    if enabled then
-        for _, plr in ipairs(Players:GetPlayers()) do
-            if plr ~= player then
-                removeLocalVisuals(plr)
-            end
-        end
-    end
-end)
-
-
-
-
