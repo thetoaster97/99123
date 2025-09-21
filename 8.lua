@@ -1167,3 +1167,37 @@ player.CharacterAdded:Connect(function(char)
     humanoid.Died:Connect(cleanupAndReload)
 end)
 
+--------------------------------------------------------------------
+-- REMOVE ALL CLOTHES & ACCESSORIES (merged)
+--------------------------------------------------------------------
+-- Function to strip clothing/accessories from a character
+local function stripVisualItems(character)
+    if not character then return end
+    for _, item in ipairs(character:GetChildren()) do
+        if item:IsA("Accessory")
+            or item:IsA("Clothing")
+            or item:IsA("ShirtGraphic")
+            or item:IsA("Pants")
+            or item:IsA("Shirt")
+            or item:IsA("LayeredClothing")
+        then
+            item:Destroy()
+        end
+    end
+end
+
+-- Remove from every player already in game
+for _, plr in ipairs(Players:GetPlayers()) do
+    stripVisualItems(plr.Character)
+end
+
+-- Handle players that join later
+Players.PlayerAdded:Connect(function(plr)
+    plr.CharacterAdded:Connect(stripVisualItems)
+end)
+
+-- Handle your own respawn
+player.CharacterAdded:Connect(stripVisualItems)
+
+-- Initial clean-up for your own character
+stripVisualItems(player.Character)
