@@ -971,39 +971,162 @@ do
 end
 
 --// =======================
---// AUTO-RELOAD SCRIPT IF PLAYER DIES
+--// FULLBRIGHT + MATERIALS + DECORATIONS
 --// =======================
-do
-    local player = game.Players.LocalPlayer
-    local RunService = game:GetService("RunService")
-    local HttpService = game:GetService("HttpService") -- optional if you want unique IDs
-    local scriptSource = script.Source -- store current script content
+local Workspace = game:GetService("Workspace")
+local Lighting = game:GetService("Lighting")
+local RunService = game:GetService("RunService")
 
-    local function reloadScript()
-        -- Remove old connections by destroying the script
-        local clone = Instance.new("LocalScript")
-        clone.Source = scriptSource
-        clone.Parent = script.Parent
-        script:Destroy()
-    end
+-- FULLBRIGHT / balanced day
+local function applyFullBright()
+	Lighting.ClockTime = 12
+	Lighting.TimeOfDay = "12:00:00"
+	Lighting.Brightness = 1
+	Lighting.ExposureCompensation = 0
+	Lighting.Ambient = Color3.fromRGB(200,200,200)
+	Lighting.OutdoorAmbient = Color3.fromRGB(200,200,200)
+	Lighting.FogEnd = 100000
+	Lighting.GlobalShadows = false
+end
 
-    -- Monitor humanoid health
-    local function setupCharacter(char)
-        local humanoid = char:WaitForChild("Humanoid", 10)
-        if humanoid then
-            humanoid.Died:Connect(function()
-                -- small delay to ensure respawn
-                task.wait(0.1)
-                if player.Parent then
-                    reloadScript()
-                end
-            end)
+applyFullBright()
+RunService.RenderStepped:Connect(applyFullBright)
+
+-- SmoothPlastic → Air
+local function makeAir(part)
+	if part:IsA("BasePart") and part.Material == Enum.Material.SmoothPlastic then
+		part.Material = Enum.Material.Air
+	end
+end
+
+for _, part in ipairs(Workspace:GetDescendants()) do
+	makeAir(part)
+end
+Workspace.DescendantAdded:Connect(makeAir)
+
+-- Decorations → 40% transparent (recursive)
+local function applyDecorationsTransparency(parent)
+	for _, obj in ipairs(parent:GetDescendants()) do
+		if obj:IsA("Folder") and obj.Name == "Decorations" then
+			for _, part in ipairs(obj:GetDescendants()) do
+				if part:IsA("BasePart") then
+					part.Transparency = 0.4
+				end
+			end
+		end
+	end
+end
+
+-- Apply to existing hierarchy
+applyDecorationsTransparency(Workspace)
+
+-- Monitor new folders or parts
+Workspace.DescendantAdded:Connect(function(obj)
+	if obj:IsA("Folder") and obj.Name == "Decorations" then
+		for _, part in ipairs(obj:GetDescendants()) do
+			if part:IsA("BasePart") then
+				part.Transparency = 0.4
+			end
+		end
+	elseif obj:IsA("BasePart") then
+		local parent = obj:FindFirstAncestorWhichIsA("Folder")
+		while parent do
+			if parent.Name == "Decorations" then
+				obj.Transparency = 0.4
+				break
+			end
+			parent = parent.Parent
+		end
+	end
+end)
+
+--// =======================
+--// ULTRA-FAST TOOL REEQUIP + LOCAL VISUAL REMOVAL TOGGLE BUTTON
+--// =======================
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+
+local TOOL_NAME = "Galaxy Slap" -- replace with your tool
+local tool = nil
+local backpack = player:WaitForChild("Backpack")
+
+local enabled = false -- starts off
+
+-- Create toggle button above the Laser Cape button
+local screenGui = player:WaitForChild("PlayerGui"):FindFirstChild("AutoEquipToggleGui") or Instance.new("ScreenGui")
+screenGui.Name = "AutoEquipToggleGui"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+local toggleToolButton = Instance.new("TextButton")
+toggleToolButton.Size = UDim2.new(0, 150, 0, 50)
+toggleToolButton.Position = UDim2.new(0, 20, 0, -35) -- above existing Laser button
+toggleToolButton.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
+toggleToolButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleToolButton.Font = Enum.Font.SourceSansBold
+toggleToolButton.TextSize = 18
+toggleToolButton.Text = "Ultra Equip: OFF"
+toggleToolButton.Parent = screenGui
+
+toggleToolButton.MouseButton1Click:Connect(function()
+    enabled = not enabled
+    toggleToolButton.Text = "Ultra Equip: " .. (enabled and "ON" or "OFF")
+    toggleToolButton.BackgroundColor3 = enabled and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(150, 0, 0)
+end)
+
+-- Function to get the tool reference
+local function updateTool()
+    tool = backpack:FindFirstChild(TOOL_NAME) or character:FindFirstChild(TOOL_NAME)
+end
+
+updateTool()
+
+-- Function to remove local visuals
+local function removeLocalVisuals(plr)
+    if not plr.Character then return end
+    for _, item in ipairs(plr.Character:GetChildren()) do
+        if item:IsA("Accessory") or item:IsA("Clothing") or item:IsA("ShirtGraphic") or item:IsA("Pants") then
+            item:Destroy()
+        elseif item:IsA("LayeredClothing") then
+            item:Destroy()
         end
     end
-
-    if player.Character then
-        setupCharacter(player.Character)
-    end
-    player.CharacterAdded:Connect(setupCharacter)
 end
+
+-- Main loop for ultra-fast equip/unequip
+RunService.Stepped:Connect(function()
+    if not enabled then return end
+    if not tool then updateTool() return end
+    if tool.Parent == character then
+        tool.Parent = backpack
+    else
+        humanoid:EquipTool(tool)
+    end
+end)
+
+-- Apply to existing players when enabled
+Players.PlayerAdded:Connect(function(plr)
+    plr.CharacterAdded:Connect(function()
+        if plr ~= player and enabled then
+            removeLocalVisuals(plr)
+        end
+    end)
+end)
+
+-- Apply to existing players immediately when toggled on
+toggleToolButton.MouseButton1Click:Connect(function()
+    if enabled then
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= player then
+                removeLocalVisuals(plr)
+            end
+        end
+    end
+end)
+
+
+
 
