@@ -1064,7 +1064,7 @@ screenGui.Parent = player:WaitForChild("PlayerGui")
 -- Create toggle button under the existing Laser Cape button
 local toggleToolButton = Instance.new("TextButton")
 toggleToolButton.Size = UDim2.new(0, 120, 0, 40) -- slightly smaller
-toggleToolButton.Position = UDim2.new(0, 20, 0, 75) -- below Laser Cape button (original at 20 + 50 height + 5 padding)
+toggleToolButton.Position = UDim2.new(0, 40, 0, 75) -- below Laser Cape button (original at 20 + 50 height + 5 padding)
 toggleToolButton.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
 toggleToolButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 toggleToolButton.Font = Enum.Font.SourceSansBold
