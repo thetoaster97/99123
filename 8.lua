@@ -1125,3 +1125,45 @@ Players.PlayerAdded:Connect(function(plr)
         end
     end)
 end)
+
+--// CLEANUP AND RELOAD ON DEATH
+local function cleanupAndReload()
+    -- Remove GUIs added by this script
+    local playerGui = player:WaitForChild("PlayerGui")
+    for _, gui in ipairs(playerGui:GetChildren()) do
+        if gui.Name:match("AutoEquipToggleGui") or gui.Name:match("TimerOverlays") or gui.Name:match("BestPetBillboard_Client") or gui.Name:match("FloatToggleGui") then
+            gui:Destroy()
+        end
+    end
+
+    -- Optionally, remove highlights or SelectionBoxes
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("Highlight") and obj.Name:match("BestPetHighlight_Client") then
+            obj:Destroy()
+        elseif obj:IsA("SelectionBox") and obj.Name == "PlayerBox" then
+            obj:Destroy()
+        elseif obj:IsA("BillboardGui") and obj.Name == "PlayerNameTag" then
+            obj:Destroy()
+        end
+    end
+
+    -- Reload the script
+    local currentScript = script
+    local clonedScript = currentScript:Clone()
+    clonedScript.Parent = currentScript.Parent
+    currentScript:Destroy()
+end
+
+-- Connect to character death
+if player.Character then
+    local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        humanoid.Died:Connect(cleanupAndReload)
+    end
+end
+
+player.CharacterAdded:Connect(function(char)
+    local humanoid = char:WaitForChild("Humanoid")
+    humanoid.Died:Connect(cleanupAndReload)
+end)
+
