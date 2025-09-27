@@ -4,48 +4,21 @@ local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local player = Players.LocalPlayer
 
--- CONFIGURATION
-local TOOL_NAME = "Laser Cape"  -- change to the tool you want to auto-equip
-local Event = ReplicatedStorage.Packages.Net:WaitForChild("RE/UseItem")
+--// =======================
+--// AUTO-FIRE ON MANUAL EQUIP
+--// =======================
 
--- =======================
--- AUTO-EQUIP & AUTO-FIRE
--- =======================
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local player = Players.LocalPlayer
 
-local forceEquipEnabled = true -- start enabled
+-- Ensure Event exists
+local Event = ReplicatedStorage:WaitForChild("Packages"):WaitForChild("Net"):WaitForChild("RE/UseItem")
 
--- Create simple toggle button
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "AutoEquipToggleGui"
-screenGui.ResetOnSpawn = false
-screenGui.Parent = player:WaitForChild("PlayerGui")
-
-local toggleButton = Instance.new("TextButton")
-toggleButton.Size = UDim2.new(0, 150, 0, 50)
-toggleButton.Position = UDim2.new(0, 20, 0, 20)
-toggleButton.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
-toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-toggleButton.Font = Enum.Font.SourceSansBold
-toggleButton.TextSize = 18
-toggleButton.Text = "Force Equip: ON"
-toggleButton.Parent = screenGui
-
-toggleButton.MouseButton1Click:Connect(function()
-    forceEquipEnabled = not forceEquipEnabled
-    toggleButton.Text = "Force Equip: " .. (forceEquipEnabled and "ON" or "OFF")
-    toggleButton.BackgroundColor3 = forceEquipEnabled and Color3.fromRGB(0, 150, 255) or Color3.fromRGB(150, 0, 0)
-end)
-
--- Function to get the equipped tool
-local function getEquippedTool()
-    local char = player.Character
-    if not char then return nil end
-    for _, item in ipairs(char:GetChildren()) do
-        if item:IsA("Tool") then
-            return item
-        end
-    end
-end
+local currentTool = nil
+local fireConnection = nil
+local FIRE_INTERVAL = 0.1 -- firing speed
 
 -- Function to fire the tool at a player
 local function fireToolAtPlayer(tool, target)
@@ -62,12 +35,7 @@ local function fireToolAtPlayer(tool, target)
     end
 end
 
--- Distance helper
-local function getDistance(p1, p2)
-    return (p1 - p2).Magnitude
-end
-
--- Get closest player
+-- Get the closest player
 local function getClosestPlayer()
     local char = player.Character
     if not char then return nil end
@@ -79,7 +47,7 @@ local function getClosestPlayer()
         if other ~= player and other.Character then
             local ohrp = other.Character:FindFirstChild("HumanoidRootPart")
             if ohrp then
-                local dist = getDistance(hrp.Position, ohrp.Position)
+                local dist = (hrp.Position - ohrp.Position).Magnitude
                 if dist < closestDist then
                     closestDist, closest = dist, other
                 end
@@ -89,38 +57,51 @@ local function getClosestPlayer()
     return closest
 end
 
--- Force equip function
-local function forceEquip()
-    if not forceEquipEnabled then return end
-    local char = player.Character
-    if not char then return end
-    local humanoid = char:FindFirstChildOfClass("Humanoid")
-    local backpack = player:FindFirstChild("Backpack")
-    if not humanoid or not backpack then return end
-    local tool = backpack:FindFirstChild(TOOL_NAME) or char:FindFirstChild(TOOL_NAME)
-    if tool and tool.Parent ~= char then
-        humanoid:EquipTool(tool)
+-- Stop previous fire loop
+local function stopAutoFire()
+    if fireConnection then
+        fireConnection:Disconnect()
+        fireConnection = nil
     end
 end
 
--- Main Heartbeat loop
+-- Start auto-fire for a tool
+local function startAutoFire(tool)
+    stopAutoFire()
+    fireConnection = RunService.Heartbeat:Connect(function()
+        if not tool or tool.Parent ~= player.Character then
+            stopAutoFire()
+            return
+        end
+        local target = getClosestPlayer()
+        if target then
+            fireToolAtPlayer(tool, target)
+        end
+    end)
+end
+
+-- Poll for currently equipped tool
 RunService.Heartbeat:Connect(function()
-    forceEquip() -- only toggled
-    local tool = getEquippedTool()
-    if tool then
-        local closest = getClosestPlayer()
-        if closest then
-            fireToolAtPlayer(tool, closest) -- always runs
+    local char = player.Character
+    if not char then return end
+
+    local equippedTool = nil
+    for _, item in ipairs(char:GetChildren()) do
+        if item:IsA("Tool") then
+            equippedTool = item
+            break
+        end
+    end
+
+    if equippedTool ~= currentTool then
+        currentTool = equippedTool
+        if currentTool then
+            startAutoFire(currentTool)
+        else
+            stopAutoFire()
         end
     end
 end)
-
--- Reconnect when character respawns
-player.CharacterAdded:Connect(function()
-    task.wait(0.25)
-    forceEquip()
-end)
-
 
 
 
@@ -1400,3 +1381,110 @@ task.spawn(function()
         for part in pairs(tracked.trap)   do if part and part.Parent then applyTrapSettings(part) end end
     end
 end)
+
+--// =======================
+--// GRAPPLE-HOOK SPEED 
+--// =======================
+
+do
+    local RunService = game:GetService("RunService")
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local Players = game:GetService("Players")
+    local player = Players.LocalPlayer
+
+    local character = player.Character or player.CharacterAdded:Wait()
+    local humanoid = character:WaitForChild("Humanoid")
+
+    -- Configuration
+    local FIRE_INTERVAL = 0.1 -- Fire 10x/sec
+    local SPEED_MULTIPLIER = 5 -- Movement boost multiplier
+    local GRAPPLE_TOOL_NAME = "Grapple Hook" -- Tool name
+
+    local Event = ReplicatedStorage.Packages.Net:WaitForChild("RE/UseItem")
+
+    local movementConnection, fireConnection
+    local isHoldingGrapple = false
+
+    -- Check if player holds Grapple Hook
+    local function checkForGrappleHook()
+        if character then
+            local tool = character:FindFirstChild(GRAPPLE_TOOL_NAME)
+            return tool and tool:IsA("Tool")
+        end
+        return false
+    end
+
+    -- Apply speed boost using AssemblyLinearVelocity
+    local function applyDirectVelocity()
+        if character and character:FindFirstChild("HumanoidRootPart") and isHoldingGrapple then
+            local rootPart = character.HumanoidRootPart
+            local moveVector = humanoid.MoveDirection
+            if moveVector.Magnitude > 0 then
+                local currentVelocity = rootPart.AssemblyLinearVelocity
+                rootPart.AssemblyLinearVelocity = Vector3.new(
+                    moveVector.X * humanoid.WalkSpeed * SPEED_MULTIPLIER,
+                    currentVelocity.Y,
+                    moveVector.Z * humanoid.WalkSpeed * SPEED_MULTIPLIER
+                )
+            end
+        end
+    end
+
+    -- Fire Grapple Hook remotely
+    local function fireGrappleHook()
+        if isHoldingGrapple then
+            pcall(function()
+                Event:FireServer(0.70743885040283)
+            end)
+        end
+    end
+
+    -- Loop auto-fire
+    local function startFireLoop()
+        if fireConnection then fireConnection:Disconnect() end
+        fireConnection = spawn(function()
+            while character and character.Parent do
+                fireGrappleHook()
+                wait(FIRE_INTERVAL)
+            end
+        end)
+    end
+
+    -- Loop movement speed
+    local function startMovementLoop()
+        if movementConnection then movementConnection:Disconnect() end
+        movementConnection = RunService.Heartbeat:Connect(function()
+            isHoldingGrapple = checkForGrappleHook()
+            applyDirectVelocity()
+        end)
+    end
+
+    -- Initialize loops
+    local function initialize()
+        startFireLoop()
+        startMovementLoop()
+        print("Grapple Hook speed & auto-fire active!")
+    end
+
+    -- Handle respawn
+    local function onCharacterAdded(newChar)
+        character = newChar
+        humanoid = character:WaitForChild("Humanoid")
+        isHoldingGrapple = false
+        if movementConnection then movementConnection:Disconnect() movementConnection = nil end
+        if fireConnection then fireConnection:Disconnect() fireConnection = nil end
+        task.wait(1)
+        initialize()
+    end
+
+    player.CharacterAdded:Connect(onCharacterAdded)
+    if character and character.Parent then initialize() end
+
+    -- Cleanup on leaving
+    Players.PlayerRemoving:Connect(function(plr)
+        if plr == player then
+            if movementConnection then movementConnection:Disconnect() end
+            if fireConnection then fireConnection:Disconnect() end
+        end
+    end)
+end
