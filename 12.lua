@@ -873,7 +873,7 @@ do
     makeUnkillable(player)
 end
 --// =======================
---// FULLBRIGHT + REDUCED GRAPHICS (skip target Decorations)
+--// FULLBRIGHT + MATERIALS + DECORATIONS (skip only the black one)
 --// =======================
 local Workspace = game:GetService("Workspace")
 local Lighting = game:GetService("Lighting")
@@ -893,23 +893,51 @@ end
 applyFullBright()
 RunService.RenderStepped:Connect(applyFullBright)
 
--- SmoothPlastic → Air (skip if inside the base Decorations folder)
+-- SmoothPlastic → Air (skip parts in the black Decorations folder)
 local function makeAir(part)
 	if part:IsA("BasePart") and part.Material == Enum.Material.SmoothPlastic then
 		if _G.TargetDecorationsFolder and part:IsDescendantOf(_G.TargetDecorationsFolder) then
-			return -- skip this one, handled by billboard script
+			return -- skip this Decorations folder (billboard script handles it)
 		end
 		part.Material = Enum.Material.Air
 	end
 end
 
--- Apply to existing
-for _, part in ipairs(Workspace:GetDescendants()) do
-	makeAir(part)
+-- Decorations → 40% transparent (except black one)
+local function applyDecorationsTransparency(folder)
+	if folder:IsA("Folder") and folder.Name == "Decorations" then
+		-- skip only the one that is targeted by the billboard script
+		if _G.TargetDecorationsFolder and folder == _G.TargetDecorationsFolder then
+			return
+		end
+		for _, part in ipairs(folder:GetDescendants()) do
+			if part:IsA("BasePart") then
+				part.Transparency = 0.4
+			end
+		end
+	end
 end
 
--- Apply to new
-Workspace.DescendantAdded:Connect(makeAir)
+-- Apply to existing parts
+for _, obj in ipairs(Workspace:GetDescendants()) do
+	makeAir(obj)
+	if obj:IsA("Folder") and obj.Name == "Decorations" then
+		applyDecorationsTransparency(obj)
+	end
+end
+
+-- Watch for new parts/folders
+Workspace.DescendantAdded:Connect(function(obj)
+	makeAir(obj)
+	if obj:IsA("Folder") and obj.Name == "Decorations" then
+		applyDecorationsTransparency(obj)
+	elseif obj:IsA("BasePart") then
+		local parent = obj:FindFirstAncestor("Decorations")
+		if parent and (not _G.TargetDecorationsFolder or parent ~= _G.TargetDecorationsFolder) then
+			obj.Transparency = 0.4
+		end
+	end
+end)
 --------------------------------------------------------------------
 -- REMOVE ALL CLOTHES & ACCESSORIES (merged)
 --------------------------------------------------------------------
