@@ -1310,74 +1310,110 @@ do
 end
 
 --// =======================
---// SERVERHOP + PET FINDER BLOCK
+--// BASE LINE + BLACK DECORATIONS
 --// =======================
 
-local HttpService = game:GetService("HttpService")
-local TeleportService = game:GetService("TeleportService")
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
+do
+    local Players = game:GetService("Players")
+    local RunService = game:GetService("RunService")
+    local player = Players.LocalPlayer
 
--- pet finder control
-local PetFinderEnabled = false
-local FoundGoodServer = false
-
--- hook into your pet finder loop
--- replace your "while true do updateBest()" with this controlled loop
-task.spawn(function()
-    while true do
-        if PetFinderEnabled then
-            local found = updateBest() -- your pet finder returns true if it found a good one
-            if found then
-                FoundGoodServer = true
-                PetFinderEnabled = false -- turn OFF after success
-                warn("[PetFinder] Found good server! Disabling until next hop.")
+    -- Find the billboard that is VISIBLE
+    local function findBaseBillboard()
+        local visibleBillboards = {}
+        for _, obj in ipairs(workspace:GetDescendants()) do
+            if obj:IsA("BillboardGui") and obj.Enabled then
+                for _, child in ipairs(obj:GetDescendants()) do
+                    if child:IsA("TextLabel") and child.Visible then
+                        if string.upper(child.Text) == "YOUR BASE" and child.TextTransparency < 1 then
+                            table.insert(visibleBillboards, obj)
+                        end
+                    end
+                end
             end
         end
-        task.wait(1)
+        if #visibleBillboards > 1 and player.Character then
+            local root = player.Character:FindFirstChild("HumanoidRootPart")
+            if root then
+                local closest, closestDist
+                for _, billboard in ipairs(visibleBillboards) do
+                    local pos
+                    if billboard.Parent and billboard.Parent:IsA("BasePart") then
+                        pos = billboard.Parent.Position
+                    elseif billboard.Parent and billboard.Parent:IsA("Model") then
+                        local part = billboard.Parent:FindFirstChildWhichIsA("BasePart", true)
+                        if part then pos = part.Position end
+                    end
+                    if pos then
+                        local dist = (pos - root.Position).Magnitude
+                        if not closest or dist < closestDist then
+                            closestDist = dist
+                            closest = billboard
+                        end
+                    end
+                end
+                if closest then return closest end
+            end
+        end
+        return visibleBillboards[1]
     end
-end)
 
--- serverhop logic
-local function ServerHop()
-    PetFinderEnabled = true -- enable during hopping
-    FoundGoodServer = false
+    -- Create a simple line between two points
+    local function createLine(startPos, endPos)
+        local distance = (endPos - startPos).Magnitude
+        local direction = (endPos - startPos).Unit
+        local line = Instance.new("Part")
+        line.Name = "BaseLine"
+        line.Anchored = true
+        line.CanCollide = false
+        line.Size = Vector3.new(0.5, 0.5, distance)
+        line.CFrame = CFrame.new(startPos + direction * distance / 2, endPos)
+        line.Color = Color3.fromRGB(255, 140, 0)
+        line.Material = Enum.Material.Neon
+        line.Transparency = 0.3
+        line.Parent = workspace
+        return line
+    end
 
-    local PlaceID = game.PlaceId
-    local servers = {}
-    local cursor
-    repeat
-        local req = game:HttpGet(
-            "https://games.roblox.com/v1/games/" .. PlaceID .. "/servers/Public?sortOrder=Asc&limit=100"
-                .. (cursor and "&cursor=" .. cursor or "")
-        )
-        local data = HttpService:JSONDecode(req)
-        for _, v in ipairs(data.data) do
-            if v.playing < v.maxPlayers and v.id ~= game.JobId then
-                table.insert(servers, v.id)
+    -- Find and color the Decorations folder black
+    local function findAndColorDecorations(billboard)
+        local baseModel = billboard.Parent
+        if not baseModel then return end
+        local parentModel = baseModel.Parent
+        if not parentModel then return end
+        local decorations = parentModel:FindFirstChild("Decorations")
+        if not decorations then return end
+        for _, obj in ipairs(decorations:GetDescendants()) do
+            if obj:IsA("BasePart") or obj:IsA("MeshPart") then
+                obj.Color = Color3.fromRGB(0, 0, 0) -- Black
+                obj.Material = Enum.Material.SmoothPlastic
             end
         end
-        cursor = data.nextPageCursor
-    until not cursor or #servers > 0
+    end
 
-    if #servers > 0 then
-        local serverId = servers[math.random(1, #servers)]
-        warn("[ServerHop] Hopping to:", serverId)
-        TeleportService:TeleportToPlaceInstance(PlaceID, serverId, LocalPlayer)
-    else
-        warn("[ServerHop] No servers found, retrying...")
+    -- Main
+    local billboard = findBaseBillboard()
+    if billboard then
+        local targetPos
+        if billboard.Adornee then
+            targetPos = billboard.Adornee.Position
+        elseif billboard.Parent and billboard.Parent:IsA("BasePart") then
+            targetPos = billboard.Parent.Position
+        elseif billboard.Parent and billboard.Parent:IsA("Model") then
+            local part = billboard.Parent:FindFirstChildWhichIsA("BasePart", true)
+            if part then targetPos = part.Position end
+        end
+
+        if targetPos then
+            findAndColorDecorations(billboard)
+            local currentLine
+            RunService.Heartbeat:Connect(function()
+                if not player.Character then return end
+                local root = player.Character:FindFirstChild("HumanoidRootPart")
+                if not root then return end
+                if currentLine then currentLine:Destroy() end
+                currentLine = createLine(root.Position, targetPos)
+            end)
+        end
     end
 end
-
--- button to trigger serverhopping
-local ScreenGui = Instance.new("ScreenGui", LocalPlayer.PlayerGui)
-local Btn = Instance.new("TextButton", ScreenGui)
-Btn.Size = UDim2.new(0, 140, 0, 50)
-Btn.Position = UDim2.new(0, 20, 0, 200)
-Btn.Text = "ServerHop"
-Btn.BackgroundColor3 = Color3.fromRGB(40,40,40)
-Btn.TextColor3 = Color3.fromRGB(255,255,255)
-
-Btn.MouseButton1Click:Connect(function()
-    ServerHop()
-end)
