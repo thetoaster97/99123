@@ -873,7 +873,7 @@ do
     makeUnkillable(player)
 end
 --// =======================
---// FULLBRIGHT + MATERIALS + DECORATIONS (skip only the black one)
+--// FULLBRIGHT + MATERIALS + DECORATIONS
 --// =======================
 local Workspace = game:GetService("Workspace")
 local Lighting = game:GetService("Lighting")
@@ -890,54 +890,58 @@ local function applyFullBright()
 	Lighting.FogEnd = 100000
 	Lighting.GlobalShadows = false
 end
+
 applyFullBright()
 RunService.RenderStepped:Connect(applyFullBright)
 
--- SmoothPlastic → Air (skip parts in the black Decorations folder)
+-- SmoothPlastic → Air
 local function makeAir(part)
 	if part:IsA("BasePart") and part.Material == Enum.Material.SmoothPlastic then
-		if _G.TargetDecorationsFolder and part:IsDescendantOf(_G.TargetDecorationsFolder) then
-			return -- skip this Decorations folder (billboard script handles it)
-		end
 		part.Material = Enum.Material.Air
 	end
 end
 
--- Decorations → 40% transparent (except black one)
-local function applyDecorationsTransparency(folder)
-	if folder:IsA("Folder") and folder.Name == "Decorations" then
-		-- skip only the one that is targeted by the billboard script
-		if _G.TargetDecorationsFolder and folder == _G.TargetDecorationsFolder then
-			return
-		end
-		for _, part in ipairs(folder:GetDescendants()) do
-			if part:IsA("BasePart") then
-				part.Transparency = 0.4
+for _, part in ipairs(Workspace:GetDescendants()) do
+	makeAir(part)
+end
+Workspace.DescendantAdded:Connect(makeAir)
+
+-- Decorations → 40% transparent (recursive)
+local function applyDecorationsTransparency(parent)
+	for _, obj in ipairs(parent:GetDescendants()) do
+		if obj:IsA("Folder") and obj.Name == "Decorations" then
+			for _, part in ipairs(obj:GetDescendants()) do
+				if part:IsA("BasePart") then
+					part.Transparency = 0.4
+				end
 			end
 		end
 	end
 end
 
--- Apply to existing parts
-for _, obj in ipairs(Workspace:GetDescendants()) do
-	makeAir(obj)
-	if obj:IsA("Folder") and obj.Name == "Decorations" then
-		applyDecorationsTransparency(obj)
-	end
-end
+-- Apply to existing hierarchy
+applyDecorationsTransparency(Workspace)
 
--- Watch for new parts/folders
+-- Monitor new folders or parts
 Workspace.DescendantAdded:Connect(function(obj)
-	makeAir(obj)
 	if obj:IsA("Folder") and obj.Name == "Decorations" then
-		applyDecorationsTransparency(obj)
+		for _, part in ipairs(obj:GetDescendants()) do
+			if part:IsA("BasePart") then
+				part.Transparency = 0.4
+			end
+		end
 	elseif obj:IsA("BasePart") then
-		local parent = obj:FindFirstAncestor("Decorations")
-		if parent and (not _G.TargetDecorationsFolder or parent ~= _G.TargetDecorationsFolder) then
-			obj.Transparency = 0.4
+		local parent = obj:FindFirstAncestorWhichIsA("Folder")
+		while parent do
+			if parent.Name == "Decorations" then
+				obj.Transparency = 0.4
+				break
+			end
+			parent = parent.Parent
 		end
 	end
 end)
+
 --------------------------------------------------------------------
 -- REMOVE ALL CLOTHES & ACCESSORIES (merged)
 --------------------------------------------------------------------
