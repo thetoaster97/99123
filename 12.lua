@@ -873,11 +873,12 @@ do
     makeUnkillable(player)
 end
 --// =======================
---// FULLBRIGHT + MATERIALS + DECORATIONS
+--// FULLBRIGHT + REDUCED GRAPHICS (skip target Decorations)
 --// =======================
 local Workspace = game:GetService("Workspace")
 local Lighting = game:GetService("Lighting")
 local RunService = game:GetService("RunService")
+
 -- FULLBRIGHT / balanced day
 local function applyFullBright()
 	Lighting.ClockTime = 12
@@ -891,159 +892,24 @@ local function applyFullBright()
 end
 applyFullBright()
 RunService.RenderStepped:Connect(applyFullBright)
--- SmoothPlastic → Air
+
+-- SmoothPlastic → Air (skip if inside the base Decorations folder)
 local function makeAir(part)
 	if part:IsA("BasePart") and part.Material == Enum.Material.SmoothPlastic then
+		if _G.TargetDecorationsFolder and part:IsDescendantOf(_G.TargetDecorationsFolder) then
+			return -- skip this one, handled by billboard script
+		end
 		part.Material = Enum.Material.Air
 	end
 end
+
+-- Apply to existing
 for _, part in ipairs(Workspace:GetDescendants()) do
 	makeAir(part)
 end
+
+-- Apply to new
 Workspace.DescendantAdded:Connect(makeAir)
--- Decorations → 40% transparent (recursive)
-local function applyDecorationsTransparency(parent)
-	for _, obj in ipairs(parent:GetDescendants()) do
-		if obj:IsA("Folder") and obj.Name == "Decorations" then
-			for _, part in ipairs(obj:GetDescendants()) do
-				if part:IsA("BasePart") then
-					part.Transparency = 0.4
-				end
-			end
-		end
-	end
-end
--- Apply to existing hierarchy
-applyDecorationsTransparency(Workspace)
--- Monitor new folders or parts
-Workspace.DescendantAdded:Connect(function(obj)
-	if obj:IsA("Folder") and obj.Name == "Decorations" then
-		for _, part in ipairs(obj:GetDescendants()) do
-			if part:IsA("BasePart") then
-				part.Transparency = 0.4
-			end
-		end
-	elseif obj:IsA("BasePart") then
-		local parent = obj:FindFirstAncestorWhichIsA("Folder")
-		while parent do
-			if parent.Name == "Decorations" then
-				obj.Transparency = 0.4
-				break
-			end
-			parent = parent.Parent
-		end
-	end
-end)
---// =======================
---// ULTRA-FAST TOOL REEQUIP + LOCAL VISUAL REMOVAL TOGGLE BUTTON
---// =======================
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local player = Players.LocalPlayer
-local character = player.Character or player.CharacterAdded:Wait()
-local humanoid = character:WaitForChild("Humanoid")
-local TOOL_NAME = "Galaxy Slap" -- replace with your tool
-local tool = nil
-local backpack = player:WaitForChild("Backpack")
-local enabled = false -- starts off
--- Reference existing GUI
-local screenGui = player:WaitForChild("PlayerGui"):FindFirstChild("AutoEquipToggleGui") or Instance.new("ScreenGui")
-screenGui.Name = "AutoEquipToggleGui"
-screenGui.ResetOnSpawn = false
-screenGui.Parent = player:WaitForChild("PlayerGui")
--- Create toggle button under the existing Laser Cape button
-local toggleToolButton = Instance.new("TextButton")
-toggleToolButton.Size = UDim2.new(0, 120, 0, 40) -- slightly smaller
-toggleToolButton.Position = UDim2.new(0, 40, 0, 75) -- below Laser Cape button (original at 20 + 50 height + 5 padding)
-toggleToolButton.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
-toggleToolButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-toggleToolButton.Font = Enum.Font.SourceSansBold
-toggleToolButton.TextSize = 16
-toggleToolButton.Text = "Ultra Equip: OFF"
-toggleToolButton.Parent = screenGui
-toggleToolButton.MouseButton1Click:Connect(function()
-    enabled = not enabled
-    toggleToolButton.Text = "Ultra Equip: " .. (enabled and "ON" or "OFF")
-    toggleToolButton.BackgroundColor3 = enabled and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(150, 0, 0)
-    -- Apply to all existing players immediately when turned on
-    if enabled then
-        for _, plr in ipairs(Players:GetPlayers()) do
-            if plr ~= player then
-                removeLocalVisuals(plr)
-            end
-        end
-    end
-end)
--- Function to get the tool reference
-local function updateTool()
-    tool = backpack:FindFirstChild(TOOL_NAME) or character:FindFirstChild(TOOL_NAME)
-end
-updateTool()
--- Function to remove local visuals
-local function removeLocalVisuals(plr)
-    if not plr.Character then return end
-    for _, item in ipairs(plr.Character:GetChildren()) do
-        if item:IsA("Accessory") or item:IsA("Clothing") or item:IsA("ShirtGraphic") or item:IsA("Pants") then
-            item:Destroy()
-        elseif item:IsA("LayeredClothing") then
-            item:Destroy()
-        end
-    end
-end
--- Main loop for ultra-fast equip/unequip
-RunService.Stepped:Connect(function()
-    if not enabled then return end
-    if not tool then updateTool() return end
-    if tool.Parent == character then
-        tool.Parent = backpack
-    else
-        humanoid:EquipTool(tool)
-    end
-end)
--- Apply to new players automatically
-Players.PlayerAdded:Connect(function(plr)
-    plr.CharacterAdded:Connect(function()
-        if plr ~= player and enabled then
-            removeLocalVisuals(plr)
-        end
-    end)
-end)
---// CLEANUP AND RELOAD ON DEATH
-local function cleanupAndReload()
-    -- Remove GUIs added by this script
-    local playerGui = player:WaitForChild("PlayerGui")
-    for _, gui in ipairs(playerGui:GetChildren()) do
-        if gui.Name:match("AutoEquipToggleGui") or gui.Name:match("TimerOverlays") or gui.Name:match("BestPetBillboard_Client") or gui.Name:match("FloatToggleGui") then
-            gui:Destroy()
-        end
-    end
-    -- Optionally, remove highlights or SelectionBoxes
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("Highlight") and obj.Name:match("BestPetHighlight_Client") then
-            obj:Destroy()
-        elseif obj:IsA("SelectionBox") and obj.Name == "PlayerBox" then
-            obj:Destroy()
-        elseif obj:IsA("BillboardGui") and obj.Name == "PlayerNameTag" then
-            obj:Destroy()
-        end
-    end
-    -- Reload the script
-    local currentScript = script
-    local clonedScript = currentScript:Clone()
-    clonedScript.Parent = currentScript.Parent
-    currentScript:Destroy()
-end
--- Connect to character death
-if player.Character then
-    local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
-    if humanoid then
-        humanoid.Died:Connect(cleanupAndReload)
-    end
-end
-player.CharacterAdded:Connect(function(char)
-    local humanoid = char:WaitForChild("Humanoid")
-    humanoid.Died:Connect(cleanupAndReload)
-end)
 --------------------------------------------------------------------
 -- REMOVE ALL CLOTHES & ACCESSORIES (merged)
 --------------------------------------------------------------------
