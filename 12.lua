@@ -753,13 +753,17 @@ end)
 player.CharacterAdded:Connect(stripVisualItems)
 -- Initial clean-up for your own character
 stripVisualItems(player.Character)
+
+
 --// =======================
 --// GHOST PLAYERS / SENTRY / TRAP HANDLER
 --// =======================
+
 local Players   = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local LocalPlayer = Players.LocalPlayer
 local task      = task
+
 -- Weak tables so parts can be GC'd
 local tracked = {
     others = setmetatable({}, { __mode = "k" }),
@@ -768,35 +772,43 @@ local tracked = {
     trap   = setmetatable({}, { __mode = "k" }),
 }
 local conns = setmetatable({}, { __mode = "k" })
+
 local function safeSet(part, prop, val)
     if not part or not part.Parent then return end
     pcall(function() part[prop] = val end)
 end
+
 local function safeGet(part, prop)
     if not part or not part.Parent then return nil end
     local ok, v = pcall(function() return part[prop] end)
     return ok and v or nil
 end
+
 -- Desired states
 local function applyOtherSettings(part)
     safeSet(part, "CanCollide", false)
     safeSet(part, "CanQuery",   false)
     safeSet(part, "CanTouch",   false)
 end
+
 local function applyLocalSettings(part)
+    -- FIXED: Keep CanTouch enabled so you can touch buttons/plates
     safeSet(part, "CanQuery", false)
-    safeSet(part, "CanTouch", false)
+    -- Don't modify CanTouch - leave it as default (true)
 end
+
 local function applySentrySettings(part)
     safeSet(part, "CanCollide", true)
     safeSet(part, "CanQuery",   false)
     safeSet(part, "CanTouch",   true)
 end
+
 local function applyTrapSettings(part)
     safeSet(part, "CanCollide", false)
     safeSet(part, "CanQuery",   false)
     safeSet(part, "CanTouch",   false)
 end
+
 local function stopWatching(part)
     local list = conns[part]
     if list then
@@ -810,19 +822,38 @@ local function stopWatching(part)
     tracked.sentry[part] = nil
     tracked.trap[part] = nil
 end
+
 local function watchPart(part, category)
     if not part or not part:IsA("BasePart") then return end
     if conns[part] then return end
     conns[part] = {}
-    if category == "others" then tracked.others[part] = true applyOtherSettings(part)
-    elseif category == "local" then tracked.localp[part] = true applyLocalSettings(part)
-    elseif category == "sentry" then tracked.sentry[part] = true applySentrySettings(part)
-    elseif category == "trap"   then tracked.trap[part]   = true applyTrapSettings(part) end
+    
+    if category == "others" then 
+        tracked.others[part] = true 
+        applyOtherSettings(part)
+    elseif category == "local" then 
+        tracked.localp[part] = true 
+        applyLocalSettings(part)
+    elseif category == "sentry" then 
+        tracked.sentry[part] = true 
+        applySentrySettings(part)
+    elseif category == "trap" then 
+        tracked.trap[part] = true 
+        applyTrapSettings(part) 
+    end
+    
+    -- FIXED: Only watch CanQuery for local player, not CanTouch
     local props = {}
-    if category == "others" then props = {"CanCollide","CanQuery","CanTouch"}
-    elseif category == "local" then props = {"CanQuery","CanTouch"}
-    elseif category == "sentry" then props = {"CanCollide","CanQuery"}
-    elseif category == "trap" then props = {"CanCollide","CanQuery","CanTouch"} end
+    if category == "others" then 
+        props = {"CanCollide","CanQuery","CanTouch"}
+    elseif category == "local" then 
+        props = {"CanQuery"} -- Removed CanTouch from monitoring
+    elseif category == "sentry" then 
+        props = {"CanCollide","CanQuery"}
+    elseif category == "trap" then 
+        props = {"CanCollide","CanQuery","CanTouch"} 
+    end
+    
     for _, prop in ipairs(props) do
         local ok, sig = pcall(function() return part:GetPropertyChangedSignal(prop) end)
         if ok and sig then
@@ -837,12 +868,14 @@ local function watchPart(part, category)
             end))
         end
     end
+    
     table.insert(conns[part], part.AncestryChanged:Connect(function()
         if not part:IsDescendantOf(game) then
             stopWatching(part)
         end
     end))
 end
+
 local function applyToContainer(container, category)
     if not container then return end
     for _, obj in ipairs(container:GetDescendants()) do
@@ -856,6 +889,7 @@ local function applyToContainer(container, category)
         end
     end)
 end
+
 -- Other players
 local function onOtherPlayerAdded(player)
     if player == LocalPlayer then return end
@@ -864,15 +898,19 @@ local function onOtherPlayerAdded(player)
     end)
     if player.Character then applyToContainer(player.Character, "others") end
 end
+
 for _, p in ipairs(Players:GetPlayers()) do onOtherPlayerAdded(p) end
 Players.PlayerAdded:Connect(onOtherPlayerAdded)
+
 -- Local player
 local function onLocalCharacter(char)
     if not char then return end
     applyToContainer(char, "local")
 end
+
 if LocalPlayer.Character then onLocalCharacter(LocalPlayer.Character) end
 LocalPlayer.CharacterAdded:Connect(onLocalCharacter)
+
 -- Workspace sentries/traps
 local function processWorkspacePart(p)
     if not p:IsA("BasePart") then return end
@@ -883,18 +921,29 @@ local function processWorkspacePart(p)
         watchPart(p, "trap")
     end
 end
+
 for _, obj in ipairs(Workspace:GetDescendants()) do processWorkspacePart(obj) end
 Workspace.DescendantAdded:Connect(processWorkspacePart)
--- Periodic enforcer
+
+-- Periodic enforcer - FIXED: Don't enforce CanTouch on local parts
 task.spawn(function()
     while true do
         task.wait(0.35)
-        for part in pairs(tracked.others) do if part and part.Parent then applyOtherSettings(part) end end
-        for part in pairs(tracked.localp) do if part and part.Parent then applyLocalSettings(part) end end
-        for part in pairs(tracked.sentry) do if part and part.Parent then applySentrySettings(part) end end
-        for part in pairs(tracked.trap)   do if part and part.Parent then applyTrapSettings(part) end end
+        for part in pairs(tracked.others) do 
+            if part and part.Parent then applyOtherSettings(part) end 
+        end
+        for part in pairs(tracked.localp) do 
+            if part and part.Parent then applyLocalSettings(part) end 
+        end
+        for part in pairs(tracked.sentry) do 
+            if part and part.Parent then applySentrySettings(part) end 
+        end
+        for part in pairs(tracked.trap) do 
+            if part and part.Parent then applyTrapSettings(part) end 
+        end
     end
 end)
+
 --// =======================
 --// GRAPPLE-HOOK SPEED 
 --// =======================
