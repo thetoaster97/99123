@@ -1147,12 +1147,9 @@ do
 end
 
 --// =======================
---// "YOU STOLE" DETECTION
+--// AUTO-KICK ON "YOU STOLE" DETECTION
 --// =======================
-
 do
-    local Players = game:GetService("Players")
-    local player = Players.LocalPlayer
     local playerGui = player:WaitForChild("PlayerGui")
 
     -- Helper: case-insensitive check for "you stole"
