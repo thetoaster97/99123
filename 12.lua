@@ -549,263 +549,44 @@ hopButton.MouseButton1Click:Connect(function()
     end
 end)
 print("✅ ServerHop button loaded.")
+
 --// =======================
---// BULLETPROOF NOCLIP CAMERA (IMMUNE TO BOOGIE BOMB)
+--// CAMERA NOCLIP
 --// =======================
 local UserInputService = game:GetService("UserInputService")
 local camera = workspace.CurrentCamera
-local player = Players.LocalPlayer
--- Camera settings
-local minZoom, maxZoom = 5, 25
-local zoom = 12
-local yaw, pitch = 0, 0
-local rotationSensitivity = 0.5
-local zoomSensitivity = 0.15
--- Joystick area (ignore touches here)
-local screenSize = camera.ViewportSize
-local joystickArea = Rect.new(0, screenSize.Y - 250, 250, screenSize.Y)
--- Safe state
-local targetCFrame = camera.CFrame
-local lastRootPosition = Vector3.new(0, 0, 0)
--- Force camera to scriptable always
-local function initializeCamera()
-    camera.CameraType = Enum.CameraType.Scriptable
-    camera.CameraSubject = nil
-    camera.FieldOfView = 70
-end
--- Get root with fallback
-local function getRoot()
-    local char = player.Character
-    if not char then return nil end
-    local root = char:FindFirstChild("HumanoidRootPart")
-    if root then
-        lastRootPosition = root.Position
-        return root
-    end
-    return {Position = lastRootPosition}
-end
--- Touch handling
-local touches, activeTouches = {}, 0
-local function isInJoystickArea(position)
-    return position.X >= joystickArea.Min.X and position.X <= joystickArea.Max.X and
-           position.Y >= joystickArea.Min.Y and position.Y <= joystickArea.Max.Y
-end
-local function updateActiveTouches()
-    activeTouches = 0
-    for _ in pairs(touches) do activeTouches += 1 end
-end
-UserInputService.TouchStarted:Connect(function(input)
-    if isInJoystickArea(input.Position) then return end
-    touches[input] = input.Position
-    updateActiveTouches()
+
+-- Lower camera sensitivity
+UserInputService.MouseDeltaSensitivity = 0.2
+
+-- Disable camera occlusion
+pcall(function()
+    player.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Invisicam
 end)
-UserInputService.TouchEnded:Connect(function(input)
-    touches[input] = nil
-    updateActiveTouches()
-end)
-UserInputService.TouchMoved:Connect(function(input)
-    if not touches[input] then return end
-    if activeTouches == 1 then
-        local delta = input.Delta
-        yaw -= delta.X * rotationSensitivity
-        pitch = math.clamp(pitch - delta.Y * rotationSensitivity, -80, 80)
-    elseif activeTouches == 2 then
-        local activeList = {}
-        for t in pairs(touches) do table.insert(activeList, t) end
-        if #activeList >= 2 then
-            local oldDist = (touches[activeList[1]] - touches[activeList[2]]).Magnitude
-            local newDist = (activeList[1].Position - activeList[2].Position).Magnitude
-            local diff = newDist - oldDist
-            zoom = math.clamp(zoom - diff * zoomSensitivity, minZoom, maxZoom)
+
+-- Set camera properties to allow noclip
+RunService.RenderStepped:Connect(function()
+    pcall(function()
+        -- Keep camera in custom mode (not scriptable which locks it)
+        if camera.CameraType ~= Enum.CameraType.Custom then
+            camera.CameraType = Enum.CameraType.Custom
         end
-    end
-    touches[input] = input.Position
-end)
--- Camera math
-local function calculateCameraPosition()
-    local root = getRoot()
-    if not root then return targetCFrame end
-    local headOffset = Vector3.new(0, 2, 0)
-    local rotation = CFrame.Angles(0, math.rad(yaw), 0) * CFrame.Angles(math.rad(pitch), 0, 0)
-    local camPos = root.Position + headOffset - rotation.LookVector * zoom
-    return CFrame.new(camPos, root.Position + headOffset)
-end
--- Update loop
-local function protectAndUpdateCamera()
-    if camera.CameraType ~= Enum.CameraType.Scriptable then
-        camera.CameraType = Enum.CameraType.Scriptable
-    end
-    if camera.CameraSubject ~= nil then
-        camera.CameraSubject = nil
-    end
-    local newCFrame = calculateCameraPosition()
-    targetCFrame = newCFrame
-    camera.CFrame = newCFrame
-    camera.Focus = newCFrame
-end
--- Init
-initializeCamera()
-RunService.RenderStepped:Connect(protectAndUpdateCamera)
-RunService.Heartbeat:Connect(protectAndUpdateCamera)
--- Reset key
-UserInputService.InputBegan:Connect(function(input, gp)
-    if gp then return end
-    if input.KeyCode == Enum.KeyCode.R then
-        initializeCamera()
-        yaw, pitch, zoom = 0, 0, 12
-    end
-end)
-player.CharacterAdded:Connect(function()
-    task.wait(0.5)
-    initializeCamera()
-    local root = getRoot()
-    if root then lastRootPosition = root.Position end
-end)
-print("🛡️ Bulletproof noclip camera active")
--- =======================
--- AUTO-SPLATTERSLAP MAGNET ATTACKER (BLOCK)
--- =======================
-do
-    local Players = game:GetService("Players")
-    local RunService = game:GetService("RunService")
-    local player = Players.LocalPlayer
-    local character = player.Character or player.CharacterAdded:Wait()
-    local hrp = character:WaitForChild("HumanoidRootPart")
-    local humanoid = character:WaitForChild("Humanoid")
-    -- Config
-    local TOOL_NAME = "Galaxy Slap"
-    local MAGNET_RADIUS = 50
-    local TELEPORT_INTERVAL = 0.03
-    local SWING_INTERVAL = 0.03
-    local FRONT_OFFSET = 1
-    local RAGDOLL_VELOCITY = 50
-    local FLING_VELOCITY = 200
-    -- Tool reference
-    local tool = character:FindFirstChild(TOOL_NAME) or player.Backpack:FindFirstChild(TOOL_NAME)
-    if not tool then
-        warn("Tool not found: "..TOOL_NAME)
-        return
-    end
-    local locked = false
-    local checkLoop
-    local autoEnabled = false -- toggle state
-    -- GUI Setup
-    local screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "AutoMagnetGui"
-    screenGui.ResetOnSpawn = false
-    screenGui.Parent = player:WaitForChild("PlayerGui")
-    local toggleButton = Instance.new("TextButton")
-    toggleButton.Size = UDim2.new(0, 120, 0, 40)
-    toggleButton.Position = UDim2.new(1, -130, 1, -50) -- bottom right corner
-    toggleButton.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
-    toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    toggleButton.Font = Enum.Font.GothamBold
-    toggleButton.TextSize = 16
-    toggleButton.Text = "Auto: OFF"
-    toggleButton.Parent = screenGui
-    toggleButton.MouseButton1Click:Connect(function()
-        autoEnabled = not autoEnabled
-        if autoEnabled then
-            toggleButton.Text = "Auto: ON"
-            toggleButton.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
-        else
-            toggleButton.Text = "Auto: OFF"
-            toggleButton.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
+        
+        -- Set camera subject to humanoid to maintain control
+        if player.Character and player.Character:FindFirstChild("Humanoid") then
+            camera.CameraSubject = player.Character.Humanoid
         end
+        
+        -- Disable camera collision
+        sethiddenproperty(camera, "HeadScale", 0)
     end)
-    -- Lock tool
-    local function lockTool()
-        if locked then return end
-        locked = true
-        if tool.Parent ~= character then
-            humanoid:EquipTool(tool)
-            task.wait(0.05)
-        end
-        if not tool:FindFirstChild("LockListener") then
-            local tag = Instance.new("BoolValue")
-            tag.Name = "LockListener"
-            tag.Parent = tool
-            tool.Unequipped:Connect(function()
-                if locked and humanoid and tool.Parent ~= character then
-                    task.defer(function()
-                        humanoid:EquipTool(tool)
-                    end)
-                end
-            end)
-        end
-        local timer = 0
-        checkLoop = RunService.Heartbeat:Connect(function(dt)
-            timer += dt
-            if timer >= 0.1 then
-                timer = 0
-                if locked and humanoid and tool.Parent ~= character then
-                    humanoid:EquipTool(tool)
-                end
-            end
-        end)
-    end
-    local function unlockTool()
-        locked = false
-        if checkLoop then
-            checkLoop:Disconnect()
-            checkLoop = nil
-        end
-    end
-    -- Helpers
-    local function getNearestPlayer()
-        local closest, closestDist = nil, MAGNET_RADIUS
-        for _, other in ipairs(Players:GetPlayers()) do
-            if other ~= player and other.Character and other.Character:FindFirstChild("HumanoidRootPart") then
-                local dist = (other.Character.HumanoidRootPart.Position - hrp.Position).Magnitude
-                if dist <= closestDist then
-                    closest = other
-                    closestDist = dist
-                end
-            end
-        end
-        return closest
-    end
-    local function isRagdolled(target)
-        local hrpTarget = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
-        if not hrpTarget then return false end
-        return hrpTarget.AssemblyLinearVelocity.Magnitude > RAGDOLL_VELOCITY
-    end
-    local function isFlinged(target)
-        local hrpTarget = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
-        if not hrpTarget then return false end
-        return hrpTarget.AssemblyLinearVelocity.Magnitude > FLING_VELOCITY
-    end
-    local function swingTool()
-        if tool.Parent == character then
-            tool:Activate()
-        end
-    end
-    -- Magnet loop with toggle
-    task.spawn(function()
-        while true do
-            if autoEnabled then
-                local target = getNearestPlayer()
-                if target and target.Character then
-                    local targetHRP = target.Character:FindFirstChild("HumanoidRootPart")
-                    local targetHum = target.Character:FindFirstChild("Humanoid")
-                    if targetHRP and targetHum and targetHum.Health > 0 then
-                        lockTool()
-                        task.wait(0.05)
-                        while autoEnabled and targetHum.Health > 0 and targetHRP and not isRagdolled(target) and not isFlinged(target) do
-                            local dir = (targetHRP.Position - hrp.Position).Unit
-                            local newPos = targetHRP.Position - dir * FRONT_OFFSET
-                            hrp.CFrame = CFrame.new(newPos, targetHRP.Position)
-                            swingTool()
-                            task.wait(SWING_INTERVAL)
-                        end
-                        unlockTool()
-                    end
-                end
-            end
-            task.wait(TELEPORT_INTERVAL)
-        end
-    end)
-end
+end)
+
+-- Remove camera collision using zoom manipulation
+player.CameraMaxZoomDistance = 50
+player.CameraMinZoomDistance = 0.5
+
+
 -- =======================
 -- UNKILLABLE PLAYER BLOCK
 -- =======================
