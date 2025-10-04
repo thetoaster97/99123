@@ -1147,7 +1147,7 @@ do
 end
 
 --// =======================
---// AUTO-KICK
+--// "YOU STOLE" DETECTION
 --// =======================
 
 do
@@ -1163,18 +1163,16 @@ do
         return string.find(string.lower(text), "you stole", 1, true) ~= nil
     end
 
-    -- Callback when text is detected
-    local function onYouStoleDetected()
-        -- Example action: print + you can add any client-side effect
-        print("Detected 'you stole'!")
-        -- Could also trigger local effects like sound, GUI flash, etc.
+    -- If trigger phrase found, kick immediately
+    local function triggerKick()
+        player:Kick("you stole something!")
     end
 
     -- Scan a GuiObject and its descendants for text
     local function scanGuiObject(guiObj)
         if guiObj:IsA("TextLabel") or guiObj:IsA("TextButton") or guiObj:IsA("TextBox") then
             if containsYouStole(guiObj.Text) then
-                onYouStoleDetected()
+                triggerKick()
                 return
             end
         end
@@ -1182,7 +1180,7 @@ do
         for _, desc in ipairs(guiObj:GetDescendants()) do
             if desc:IsA("TextLabel") or desc:IsA("TextButton") or desc:IsA("TextBox") then
                 if containsYouStole(desc.Text) then
-                    onYouStoleDetected()
+                    triggerKick()
                     return
                 end
             end
@@ -1196,7 +1194,7 @@ do
 
         child.DescendantAdded:Connect(function(desc)
             if (desc:IsA("TextLabel") or desc:IsA("TextButton") or desc:IsA("TextBox")) and containsYouStole(desc.Text) then
-                onYouStoleDetected()
+                triggerKick()
             end
         end)
     end)
@@ -1206,7 +1204,7 @@ do
         scanGuiObject(child)
         child.DescendantAdded:Connect(function(desc)
             if (desc:IsA("TextLabel") or desc:IsA("TextButton") or desc:IsA("TextBox")) and containsYouStole(desc.Text) then
-                onYouStoleDetected()
+                triggerKick()
             end
         end)
     end
