@@ -1206,3 +1206,19 @@ do
         end)
     end
 end
+
+--// =======================
+--// GRAVITY NORMALIZER
+--// =======================
+
+do
+    local RunService = game:GetService("RunService")
+    local Workspace = game:GetService("Workspace")
+    local NORMAL_GRAVITY = 196.2 -- Roblox default
+
+    RunService.Heartbeat:Connect(function()
+        if Workspace.Gravity ~= NORMAL_GRAVITY then
+            Workspace.Gravity = NORMAL_GRAVITY
+        end
+    end)
+end
