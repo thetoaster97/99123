@@ -1246,7 +1246,7 @@ do
         local platform = nil
         local bodyPos = nil
         local initialHeight = 0
-        local moveSpeed = 16
+        local moveSpeed = 39
         local motors = {}
 
         -- Create GUI
