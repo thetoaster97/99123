@@ -1243,7 +1243,7 @@ do
     local platform = nil
     local bodyPos = nil
     local initialHeight = 0
-    local moveSpeed = 39
+    local moveSpeed = 16
     local motors = {}
 
     -- Create GUI
@@ -1455,4 +1455,27 @@ do
                 local right = camCF.RightVector  
                   
                 local moveX = right * moveDirection.X  
-             
+                local moveZ = forward * -moveDirection.Y  
+                  
+                local finalDir = (moveX + moveZ)  
+                local flatDir = Vector3.new(finalDir.X, 0, finalDir.Z).Unit  
+                  
+                rootPart.Velocity = flatDir * moveSpeed  
+            else  
+                rootPart.Velocity = Vector3.new(0, rootPart.Velocity.Y, 0)  
+            end  
+        end
+    end)
+
+    -- Respawn handler
+    player.CharacterAdded:Connect(function(newChar)
+        character = newChar
+        humanoid = newChar:WaitForChild("Humanoid")
+        rootPart = newChar:WaitForChild("HumanoidRootPart")
+        cleanupRagdoll()
+        wait(0.5)
+        findMotors()
+    end)
+
+    print("Ragdoll detection via remote event loaded!")
+end
