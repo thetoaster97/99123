@@ -1223,7 +1223,8 @@ do
     end)
 end
 
---// =======================
+-// =======================
+
 --// RAGDOLL MOVEMENT CONTROLS
 --// =======================
 do
@@ -1244,7 +1245,7 @@ do
         local platform = nil
         local bodyPos = nil
         local initialHeight = 0
-        local moveSpeed = 39
+        local moveSpeed = 16
         local motors = {}
 
         -- Create GUI
@@ -1443,6 +1444,40 @@ do
                     bodyPos.Position = Vector3.new(rootPart.Position.X, initialHeight + 1, rootPart.Position.Z)
                 end
 
-  
+                if platform then
+                    platform.Position = Vector3.new(rootPart.Position.X, initialHeight - 4, rootPart.Position.Z)
+                end
+
+                if moveDirection.Magnitude > 0 then
+                    local camera = workspace.CurrentCamera
+                    local camCF = camera.CFrame
+
+                    local forward = camCF.LookVector
+                    local right = camCF.RightVector
+
+                    local moveX = right * moveDirection.X
+                    local moveZ = forward * -moveDirection.Y
+
+                    local finalDir = (moveX + moveZ)
+                    local flatDir = Vector3.new(finalDir.X, 0, finalDir.Z).Unit
+
+                    rootPart.Velocity = flatDir * moveSpeed
+                else
+                    rootPart.Velocity = Vector3.new(0, rootPart.Velocity.Y, 0)
+                end
+            end
+        end)
+    end
+
+    -- Init on character
+    if player.Character then
+        initRagdollControls()
+    end
+
+    player.CharacterAdded:Connect(initRagdollControls)
+
+    print("Ragdoll controls loaded!")
+end
+
 
 
