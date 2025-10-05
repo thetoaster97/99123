@@ -504,51 +504,83 @@ local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
 local player = game:GetService("Players").LocalPlayer
 local placeId = game.PlaceId
--- Create simple button UI
+
+-- Create button UI
 local hopGui = Instance.new("ScreenGui")
 hopGui.Name = "ServerHopGui"
 hopGui.ResetOnSpawn = false
 hopGui.Parent = player:WaitForChild("PlayerGui")
+
 local hopButton = Instance.new("TextButton")
 hopButton.Name = "ServerHopButton"
 hopButton.Size = UDim2.new(0, 100, 0, 40)
-hopButton.Position = UDim2.new(1, -110, 0, 10) -- top-right
+hopButton.Position = UDim2.new(1, -110, 0, 10)
 hopButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 hopButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 hopButton.Font = Enum.Font.SourceSansBold
 hopButton.TextSize = 18
 hopButton.Text = "ServerHop"
 hopButton.Parent = hopGui
--- Function to find a new server
+
+-- Safer server fetch
 local function getServer()
-    local servers = {}
-    local req = game:HttpGet(
-        ("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100"):format(placeId)
-    )
-    local data = HttpService:JSONDecode(req)
-    if data and data.data then
-        for _, server in ipairs(data.data) do
-            if server.playing < server.maxPlayers and server.id ~= game.JobId then
-                table.insert(servers, server.id)
-            end
-        end
-    end
-    if #servers > 0 then
-        return servers[math.random(1, #servers)]
-    else
-        return nil
-    end
+	local servers = {}
+	local cursor = nil
+	local tries = 0
+
+	repeat
+		local url = ("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100%s"):format(
+			placeId,
+			cursor and ("&cursor=" .. cursor) or ""
+		)
+
+		local success, result = pcall(function()
+			return game:HttpGet(url)
+		end)
+
+		if success and result then
+			local data = HttpService:JSONDecode(result)
+			if data and data.data then
+				for _, server in ipairs(data.data) do
+					-- Skip servers missing info
+					if type(server.playing) == "number" and type(server.maxPlayers) == "number" then
+						if server.playing < server.maxPlayers and server.id ~= game.JobId then
+							table.insert(servers, server.id)
+						end
+					end
+				end
+			end
+			cursor = data.nextPageCursor
+		else
+			warn("⚠️ Failed to get server list.")
+			break
+		end
+
+		tries += 1
+	until #servers > 0 or not cursor or tries >= 3
+
+	if #servers > 0 then
+		return servers[math.random(1, #servers)]
+	else
+		return nil
+	end
 end
--- Button click = serverhop
+
+-- Button click
 hopButton.MouseButton1Click:Connect(function()
-    local serverId = getServer()
-    if serverId then
-        TeleportService:TeleportToPlaceInstance(placeId, serverId, player)
-    else
-        warn("⚠️ No available servers found to hop into.")
-    end
+	hopButton.Text = "Hopping..."
+	hopButton.Active = false
+
+	local serverId = getServer()
+	if serverId then
+		TeleportService:TeleportToPlaceInstance(placeId, serverId, player)
+	else
+		warn("⚠️ No valid servers found.")
+		hopButton.Text = "ServerHop"
+		hopButton.Active = true
+	end
 end)
-print("✅ ServerHop button loaded.")
+
 
 --// =======================
 --// CAMERA NOCLIP
