@@ -1512,3 +1512,363 @@ do
     print("Ragdoll controls loaded!")
 end
 
+--// =======================
+--// DESYNC/FLING BLOCK
+--// =======================
+do
+    local Character = player.Character or player.CharacterAdded:Wait()
+    local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+    local Humanoid = Character:WaitForChild("Humanoid")
+    
+    local DESYNC_ENABLED = false
+    local FAKE_POSITION = nil
+    local UPDATE_INTERVAL = 0.5 
+    local lastUpdate = tick()
+    local OFFSET_RANGE = 4 
+    local DEBOUNCE = false
+    local LAST_F_PRESS = 0
+    local DOUBLE_PRESS_THRESHOLD = 0.3
+    local ORIGINAL_POSITION = nil
+    
+    local function createBlurEffect()
+        local blurEffect = Instance.new("BlurEffect")
+        blurEffect.Name = "FlingBlur"
+        blurEffect.Size = 0
+        blurEffect.Parent = game:GetService("Lighting")
+        return blurEffect
+    end
+    
+    local blurEffect = createBlurEffect()
+    
+    local function createFlingGUI()
+        local screenGui = Instance.new("ScreenGui")
+        screenGui.Name = "FlingGUI"
+        screenGui.ResetOnSpawn = false
+        screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        
+        local textLabel = Instance.new("TextLabel")
+        textLabel.Size = UDim2.new(1, 0, 1, 0)
+        textLabel.BackgroundTransparency = 1
+        textLabel.Text = "IF YOUR GETTING FLINGED ITS NORMAL JUST WAIT"
+        textLabel.TextColor3 = Color3.fromRGB(255, 165, 0)
+        textLabel.TextScaled = true
+        textLabel.Font = Enum.Font.GothamBold
+        textLabel.TextStrokeTransparency = 0
+        textLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+        textLabel.Visible = false
+        textLabel.Parent = screenGui
+        
+        screenGui.Parent = game:GetService("CoreGui")
+        return screenGui
+    end
+    
+    local flingGUI = createFlingGUI()
+    local orangeText = flingGUI:FindFirstChild("TextLabel")
+    
+    local controlGui = Instance.new("ScreenGui")
+    controlGui.Name = "DesyncControl"
+    controlGui.ResetOnSpawn = false
+    controlGui.Parent = game:GetService("CoreGui")
+    
+    local toggleButton = Instance.new("TextButton")
+    toggleButton.Name = "ToggleButton"
+    toggleButton.Size = UDim2.new(0, 150, 0, 50)
+    toggleButton.Position = UDim2.new(0.5, -75, 0, 20)
+    toggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    toggleButton.Font = Enum.Font.SourceSansBold
+    toggleButton.TextSize = 20
+    toggleButton.Text = "Start Desync"
+    toggleButton.Parent = controlGui
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = toggleButton
+    
+    local function toggleFlingEffects(enabled)
+        if enabled then
+            if orangeText then
+                orangeText.Visible = true
+            end
+            
+            local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+            local tween = TweenService:Create(blurEffect, tweenInfo, {Size = 50})
+            tween:Play()
+        else
+            if orangeText then
+                orangeText.Visible = false
+            end
+            
+            local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+            local tween = TweenService:Create(blurEffect, tweenInfo, {Size = 0})
+            tween:Play()
+        end
+    end
+    
+    local function isOnGround()
+        if not Character or not HumanoidRootPart then return false end
+        
+        local rayOrigin = HumanoidRootPart.Position
+        local rayDirection = Vector3.new(0, -5, 0)
+        local raycastParams = RaycastParams.new()
+        raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+        raycastParams.FilterDescendantsInstances = {Character}
+        
+        local raycastResult = workspace:Raycast(rayOrigin, rayDirection, raycastParams)
+        return raycastResult ~= nil
+    end
+    
+    local function teleportToGround()
+        if not Character or not HumanoidRootPart then return end
+        
+        local rayOrigin = HumanoidRootPart.Position
+        local rayDirection = Vector3.new(0, -1000, 0)
+        local raycastParams = RaycastParams.new()
+        raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+        raycastParams.FilterDescendantsInstances = {Character}
+        
+        local raycastResult = workspace:Raycast(rayOrigin, rayDirection, raycastParams)
+        
+        if raycastResult then
+            local groundPosition = raycastResult.Position + Vector3.new(0, 3, 0)
+            HumanoidRootPart.CFrame = CFrame.new(groundPosition)
+            HumanoidRootPart.Velocity = Vector3.new(0, 0, 0)
+            HumanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+            HumanoidRootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+        end
+    end
+    
+    print("Desync script loaded - Use GUI button to toggle")
+    
+    pcall(function()
+        PhysicsService:RegisterCollisionGroup("NoCollide")
+        PhysicsService:CollisionGroupSetCollidable("NoCollide", "Default", false)
+    end)
+    
+    local function applyFFlags(enable)
+        pcall(function()
+            if enable then
+                setfflag("WorldStepMax", "-1000000")
+                setfflag("DFIntS2PhysicsSenderRate", "1")
+                setfflag("DFIntAssemblyExtentsExpansionStudHundredth", "1000")
+                setfflag("FFlagRakNetForceUseUnreliable", "True")
+                setfflag("FFlagDebugDisableTelemetryV2Event", "True")
+                setfflag("DFIntNetworkLatencyTolerance", "9999")
+                setfflag("DFIntTaskSchedulerTargetFps", "1")
+                setfflag("DFIntNetworkPhysicsSenderRate", "1")
+                setfflag("DFIntNetworkPhysicsRate", "1")
+                setfflag("DFIntCharacterCollisionUpdateRate", "1")
+                setfflag("DFIntCharacterControllerUpdateRate", "1")
+            else
+                setfflag("WorldStepMax", "0")
+                setfflag("DFIntS2PhysicsSenderRate", "60")
+                setfflag("DFIntAssemblyExtentsExpansionStudHundredth", "0")
+                setfflag("DFIntNetworkLatencyTolerance", "100")
+                setfflag("DFIntTaskSchedulerTargetFps", "60")
+                setfflag("DFIntNetworkPhysicsSenderRate", "60")
+                setfflag("DFIntNetworkPhysicsRate", "60")
+                setfflag("DFIntCharacterCollisionUpdateRate", "30")
+                setfflag("DFIntCharacterControllerUpdateRate", "30")
+            end
+        end)
+    end
+    
+    local function setClientOwnership()
+        for _, part in pairs(Character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                pcall(function()
+                    part:SetNetworkOwner(player)
+                    part.Anchored = false
+                    if DESYNC_ENABLED then
+                        part.CollisionGroup = "NoCollide"
+                        part.CanCollide = false
+                    else
+                        part.CollisionGroup = "Default"
+                        part.CanCollide = true
+                    end
+                end)
+            end
+        end
+        pcall(function()
+            sethiddenproperty(player, "SimulationRadius", 99999)
+        end)
+    end
+    
+    local function initializeDesync()
+        if HumanoidRootPart then
+            FAKE_POSITION = HumanoidRootPart.CFrame
+            setClientOwnership()
+            applyFFlags(true)
+        end
+    end
+    
+    local function toggleDesync()
+        DESYNC_ENABLED = not DESYNC_ENABLED
+        if DESYNC_ENABLED then
+            initializeDesync()
+            toggleButton.Text = "Stop Desync"
+            toggleButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+        else
+            applyFFlags(false)
+            setClientOwnership()
+            toggleButton.Text = "Start Desync"
+            toggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+        end
+    end
+    
+    local function smartFling()
+        if not Character or not HumanoidRootPart then return end
+        
+        toggleFlingEffects(true)
+        
+        ORIGINAL_POSITION = HumanoidRootPart.CFrame
+        local originalGravity = workspace.Gravity
+        
+        workspace.Gravity = 50
+        
+        local flingForce = Vector3.new(
+            math.random(-200, 200),
+            math.random(150, 250),
+            math.random(-200, 200)
+        )
+        
+        HumanoidRootPart.Velocity = flingForce
+        
+        local flingStartTime = tick()
+        local groundCheckConnection
+        
+        groundCheckConnection = RunService.Heartbeat:Connect(function()
+            local elapsedTime = tick() - flingStartTime
+            
+            if elapsedTime >= 2.5 or isOnGround() then
+                HumanoidRootPart.Velocity = Vector3.new(0, 0, 0)
+                HumanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                HumanoidRootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+                
+                groundCheckConnection:Disconnect()
+            end
+        end)
+        
+        wait(2.5)
+        
+        if groundCheckConnection then
+            groundCheckConnection:Disconnect()
+        end
+        
+        if ORIGINAL_POSITION then
+            HumanoidRootPart.CFrame = ORIGINAL_POSITION
+            HumanoidRootPart.Velocity = Vector3.new(0, 0, 0)
+            HumanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+            HumanoidRootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+        end
+        
+        workspace.Gravity = originalGravity
+        
+        teleportToGround()
+        
+        wait(0.1)
+        toggleFlingEffects(false)
+    end
+    
+    toggleButton.MouseButton1Click:Connect(function()
+        if not DEBOUNCE then
+            DEBOUNCE = true
+            toggleButton.Active = false
+            
+            toggleDesync()
+            
+            wait(0.3)
+            toggleButton.Active = true
+            DEBOUNCE = false
+        end
+    end)
+    
+    RunService.RenderStepped:Connect(function()
+        if not DESYNC_ENABLED or not Character or not HumanoidRootPart then return end
+        Humanoid:ChangeState(Enum.HumanoidStateType.Running)
+        Humanoid.PlatformStand = false
+        for _, part in pairs(Character:GetChildren()) do
+            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                part.CFrame = HumanoidRootPart.CFrame * CFrame.new(
+                    math.random(-OFFSET_RANGE, OFFSET_RANGE),
+                    math.random(-0.5, 0.5),
+                    math.random(-OFFSET_RANGE, OFFSET_RANGE)
+                )
+            end
+        end
+    end)
+    
+    RunService.Heartbeat:Connect(function()
+        if not DESYNC_ENABLED or not Character or not HumanoidRootPart or not FAKE_POSITION then return end
+        if tick() - lastUpdate >= UPDATE_INTERVAL then
+            pcall(function()
+                local moveOffset = Humanoid.MoveDirection * 0.2
+                local randomOffset = Vector3.new(
+                    math.random(-OFFSET_RANGE/2, OFFSET_RANGE/2),
+                    0,
+                    math.random(-OFFSET_RANGE/2, OFFSET_RANGE/2)
+                )
+                FAKE_POSITION = FAKE_POSITION * CFrame.new(moveOffset + randomOffset)
+                HumanoidRootPart.CFrame = FAKE_POSITION
+            end)
+            lastUpdate = tick()
+        end
+    end)
+    
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed or DEBOUNCE or input.KeyCode ~= Enum.KeyCode.F then return end
+        
+        local currentTime = tick()
+        
+        if currentTime - LAST_F_PRESS <= DOUBLE_PRESS_THRESHOLD then
+            if not DEBOUNCE then
+                DEBOUNCE = true
+                smartFling()
+                wait(0.5)
+                DEBOUNCE = false
+            end
+        else
+            if not DEBOUNCE then
+                DEBOUNCE = true
+                toggleDesync()
+                wait(0.3)
+                DEBOUNCE = false
+            end
+        end
+        
+        LAST_F_PRESS = currentTime
+    end)
+    
+    player.CharacterAdded:Connect(function(newChar)
+        Character = newChar
+        HumanoidRootPart = newChar:WaitForChild("HumanoidRootPart")
+        Humanoid = newChar:WaitForChild("Humanoid")
+        
+        if Humanoid then
+            Humanoid.MaxHealth = math.huge
+            Humanoid.Health = math.huge
+            
+            Humanoid:GetPropertyChangedSignal("Health"):Connect(function()
+                Humanoid.Health = math.huge
+            end)
+        end
+        
+        if DESYNC_ENABLED then
+            wait(1)
+            initializeDesync()
+        end
+    end)
+    
+    game:GetService("Lighting").ChildRemoved:Connect(function(child)
+        if child.Name == "FlingBlur" then
+            blurEffect = createBlurEffect()
+        end
+    end)
+    
+    game:GetService("CoreGui").ChildRemoved:Connect(function(child)
+        if child.Name == "FlingGUI" then
+            flingGUI = createFlingGUI()
+            orangeText = flingGUI:FindFirstChild("TextLabel")
+        end
+    end)
+end
