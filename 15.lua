@@ -980,7 +980,7 @@ do
     local function initialize()
         startFireLoop()
         startMovementLoop()
-        print("Grapple Hook speed & auto-fire active!")
+        print("Grapple is on")
     end
     -- Handle respawn
     local function onCharacterAdded(newChar)
@@ -1322,7 +1322,7 @@ do
         local function setupRagdoll()
             if isRagdolled then return end
             isRagdolled = true
-            print("Ragdoll detected!")
+            print("hit")
 
             initialHeight = rootPart.Position.Y
             joystickOuter.Visible = true
@@ -1364,7 +1364,7 @@ do
                 platform = nil
             end
 
-            print("Ragdoll ended")
+            print("hit ended")
         end
 
         -- Listen for ragdoll event
@@ -1443,7 +1443,7 @@ do
 
     player.CharacterAdded:Connect(initRagdollControls)
 
-    print("Ragdoll controls loaded!")
+    print("Anti-ragdoll loaded")
 end
 
 --// =======================
@@ -1606,10 +1606,10 @@ do
     local gui, startBtn = createGUI()
 
     -- First print statement
-    print("hello " .. LocalPlayer.DisplayName .. " if ur anti hit aint working anymore press the desync button or press f again ty")
+    print("hello " .. LocalPlayer.DisplayName .. "  Thelueckster tells you to lock in")
 
     -- Second print statement
-    print("TUTORIAL: just press the button then it should work IF IT DOSENT HERES AN TUTORIAL FOR PC NOT MOBILE IT SHOULD WORK IF U PRESS THE BUTTON IM SURE. PRESS F 2x if u dont wanna press the button then it should work too")
+    print("good luck")
 
     pcall(function()
         PhysicsService:RegisterCollisionGroup("NoCollide")
@@ -1698,7 +1698,7 @@ do
         local Event = game:GetService("ReplicatedStorage").Packages.Net["RE/QuantumCloner/OnTeleport"]
         Event:FireServer()
         
-        print("Fired QuantumCloner teleport event!")
+        print("Fired Cloner Teleport")
         
         -- Brief wait for server to process
         wait(0.3)
@@ -1711,7 +1711,7 @@ do
         -- FIRE REMOTE EVENT FIRST
         local Event = game:GetService("ReplicatedStorage").Packages.Net["RE/QuantumCloner/OnTeleport"]
         Event:FireServer()
-        print("Fired QuantumCloner teleport event FIRST!")
+        print("Fired  teleport event FIRST")
         wait(0.5)
         
         -- Then do the desync toggles
@@ -2141,3 +2141,4 @@ do
         end
     end)
 end
+
