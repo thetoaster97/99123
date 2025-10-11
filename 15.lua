@@ -1113,37 +1113,45 @@ do
 end
 
 --// =======================
---// AUTO-KICK ON "YOU STOLE" DETECTION
+--// AUTO-KICK ON "YOU STOLE" DETECTION (INCLUDES ITEM NAME)
 --// =======================
 do
     local playerGui = player:WaitForChild("PlayerGui")
 
-    -- Helper: case-insensitive check for "you stole"
-    local function containsYouStole(text)
+    -- Helper: detect if text contains "you stole" (case-insensitive)
+    local function getYouStoleText(text)
         if typeof(text) ~= "string" then
-            return false
+            return nil
         end
-        return string.find(string.lower(text), "you stole", 1, true) ~= nil
+        local lowerText = string.lower(text)
+        local startPos = string.find(lowerText, "you stole", 1, true)
+        if startPos then
+            return text -- return the full text as-is
+        end
+        return nil
     end
 
-    -- If trigger phrase found, kick immediately
-    local function triggerKick()
-        player:Kick("you stole something!")
+    -- Kick with the specific detected text
+    local function triggerKick(foundText)
+        local message = foundText or "you stole something!"
+        player:Kick(message)
     end
 
-    -- Scan a GuiObject and its descendants for text
+    -- Scan a GuiObject and its descendants for "you stole"
     local function scanGuiObject(guiObj)
         if guiObj:IsA("TextLabel") or guiObj:IsA("TextButton") or guiObj:IsA("TextBox") then
-            if containsYouStole(guiObj.Text) then
-                triggerKick()
+            local foundText = getYouStoleText(guiObj.Text)
+            if foundText then
+                triggerKick(foundText)
                 return
             end
         end
 
         for _, desc in ipairs(guiObj:GetDescendants()) do
             if desc:IsA("TextLabel") or desc:IsA("TextButton") or desc:IsA("TextBox") then
-                if containsYouStole(desc.Text) then
-                    triggerKick()
+                local foundText = getYouStoleText(desc.Text)
+                if foundText then
+                    triggerKick(foundText)
                     return
                 end
             end
@@ -1152,12 +1160,15 @@ do
 
     -- Watch for new GUIs appearing
     playerGui.ChildAdded:Connect(function(child)
-        task.wait(0.05) -- allow population
+        task.wait(0.05)
         scanGuiObject(child)
 
         child.DescendantAdded:Connect(function(desc)
-            if (desc:IsA("TextLabel") or desc:IsA("TextButton") or desc:IsA("TextBox")) and containsYouStole(desc.Text) then
-                triggerKick()
+            if desc:IsA("TextLabel") or desc:IsA("TextButton") or desc:IsA("TextBox") then
+                local foundText = getYouStoleText(desc.Text)
+                if foundText then
+                    triggerKick(foundText)
+                end
             end
         end)
     end)
@@ -1166,12 +1177,16 @@ do
     for _, child in ipairs(playerGui:GetChildren()) do
         scanGuiObject(child)
         child.DescendantAdded:Connect(function(desc)
-            if (desc:IsA("TextLabel") or desc:IsA("TextButton") or desc:IsA("TextBox")) and containsYouStole(desc.Text) then
-                triggerKick()
+            if desc:IsA("TextLabel") or desc:IsA("TextButton") or desc:IsA("TextBox") then
+                local foundText = getYouStoleText(desc.Text)
+                if foundText then
+                    triggerKick(foundText)
+                end
             end
         end)
     end
 end
+
 
 --// =======================
 --// GRAVITY NORMALIZER
@@ -2141,4 +2156,3 @@ do
         end
     end)
 end
-
