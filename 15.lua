@@ -980,6 +980,7 @@ do
     local function initialize()
         startFireLoop()
         startMovementLoop()
+        print("Grapple Hook speed & auto-fire active!")
     end
     -- Handle respawn
     local function onCharacterAdded(newChar)
@@ -1442,7 +1443,7 @@ do
 
     player.CharacterAdded:Connect(initRagdollControls)
 
-    
+    print("Ragdoll controls loaded!")
 end
 
 --// =======================
@@ -1603,6 +1604,12 @@ do
     end
 
     local gui, startBtn = createGUI()
+
+    -- First print statement
+    print("hello " .. LocalPlayer.DisplayName .. " if ur anti hit aint working anymore press the desync button or press f again ty")
+
+    -- Second print statement
+    print("TUTORIAL: just press the button then it should work IF IT DOSENT HERES AN TUTORIAL FOR PC NOT MOBILE IT SHOULD WORK IF U PRESS THE BUTTON IM SURE. PRESS F 2x if u dont wanna press the button then it should work too")
 
     pcall(function()
         PhysicsService:RegisterCollisionGroup("NoCollide")
@@ -1823,6 +1830,7 @@ do
 end
 
 --// =======================
+
 --// SILENT BEST PET TRACKER + AUTO GRAPPLE
 --// =======================
 
@@ -1834,7 +1842,7 @@ do
 
     local GRAPPLE_SPEED = 150
     local GRAPPLE_TOOL_NAME = "Grapple Hook"
-    local HORIZONTAL_DISTANCE = 10
+    local HORIZONTAL_DISTANCE = 25
     local SMOOTH_RADIUS = 80
 
     local function parseMoney(text)
