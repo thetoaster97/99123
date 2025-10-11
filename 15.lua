@@ -980,7 +980,6 @@ do
     local function initialize()
         startFireLoop()
         startMovementLoop()
-        print("Grapple Hook speed & auto-fire active!")
     end
     -- Handle respawn
     local function onCharacterAdded(newChar)
@@ -1443,7 +1442,7 @@ do
 
     player.CharacterAdded:Connect(initRagdollControls)
 
-    print("Ragdoll controls loaded!")
+    
 end
 
 --// =======================
@@ -1604,12 +1603,6 @@ do
     end
 
     local gui, startBtn = createGUI()
-
-    -- First print statement
-    print("hello " .. LocalPlayer.DisplayName .. " if ur anti hit aint working anymore press the desync button or press f again ty")
-
-    -- Second print statement
-    print("TUTORIAL: just press the button then it should work IF IT DOSENT HERES AN TUTORIAL FOR PC NOT MOBILE IT SHOULD WORK IF U PRESS THE BUTTON IM SURE. PRESS F 2x if u dont wanna press the button then it should work too")
 
     pcall(function()
         PhysicsService:RegisterCollisionGroup("NoCollide")
