@@ -1830,6 +1830,7 @@ do
 end
 
 --// =======================
+
 --// SILENT BEST PET TRACKER + AUTO GRAPPLE
 --// =======================
 
@@ -1918,7 +1919,6 @@ do
     end
 
     local grappleLine
-    local modifiedParts = {}
 
     local function createGrappleLine(startPos, endPos)
         if grappleLine then grappleLine:Destroy() end
@@ -1941,64 +1941,6 @@ do
             grappleLine:Destroy()
             grappleLine = nil
         end
-    end
-
-    local function makeSurroundingsSmooth(playerPos, character)
-        for part, originalProps in pairs(modifiedParts) do
-            if part and part.Parent then
-                part.Material = originalProps.Material
-                part.Shape = originalProps.Shape
-                if part:FindFirstChild("CustomPhysicalProperties") then
-                    part:FindFirstChild("CustomPhysicalProperties"):Destroy()
-                end
-                part.CustomPhysicalProperties = originalProps.CustomPhysicalProperties
-            end
-        end
-        modifiedParts = {}
-        
-        local region = Region3.new(
-            playerPos - Vector3.new(SMOOTH_RADIUS, SMOOTH_RADIUS, SMOOTH_RADIUS),
-            playerPos + Vector3.new(SMOOTH_RADIUS, SMOOTH_RADIUS, SMOOTH_RADIUS)
-        )
-        region = region:ExpandToGrid(4)
-        
-        local partsInRegion = workspace:FindPartsInRegion3(region, character, 500)
-        
-        for _, part in ipairs(partsInRegion) do
-            if part:IsA("BasePart") and part.Parent ~= character and not part:IsDescendantOf(character) then
-                local parent = part.Parent
-                if parent and (parent:FindFirstChild("Humanoid") or parent.Name == "Camera") then
-                    continue
-                end
-                
-                if not modifiedParts[part] then
-                    modifiedParts[part] = {
-                        Material = part.Material,
-                        Shape = part.Shape,
-                        CustomPhysicalProperties = part.CustomPhysicalProperties
-                    }
-                    
-                    if part:IsA("Part") then
-                        part.Shape = Enum.PartType.Cylinder
-                    end
-                    
-                    part.CustomPhysicalProperties = PhysicalProperties.new(0.7, 0.0, 0.0, 1, 1)
-                end
-            end
-        end
-    end
-
-    local function restoreAllParts()
-        for part, originalProps in pairs(modifiedParts) do
-            if part and part.Parent then
-                pcall(function()
-                    part.Material = originalProps.Material
-                    part.Shape = originalProps.Shape
-                    part.CustomPhysicalProperties = originalProps.CustomPhysicalProperties
-                end)
-            end
-        end
-        modifiedParts = {}
     end
 
     local character = player.Character or player.CharacterAdded:Wait()
@@ -2026,7 +1968,6 @@ do
     local function grappleToPet()
         if not currentPart or not character or not character:FindFirstChild("HumanoidRootPart") then
             clearGrappleLine()
-            restoreAllParts()
             return
         end
         
@@ -2035,7 +1976,6 @@ do
         local currentPos = rootPart.Position
         
         createGrappleLine(currentPos, currentPart.Position)
-        makeSurroundingsSmooth(currentPos, character)
         
         local horizontalDistance = math.sqrt(
             (targetPos.X - currentPos.X)^2 + 
@@ -2046,7 +1986,6 @@ do
             rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
             isAutoGrappling = false
             clearGrappleLine()
-            restoreAllParts()
             
             local tool = character:FindFirstChild(GRAPPLE_TOOL_NAME)
             if tool and tool:IsA("Tool") then
@@ -2081,7 +2020,6 @@ do
             character.HumanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
         end
         clearGrappleLine()
-        restoreAllParts()
         
         local tool = character:FindFirstChild(GRAPPLE_TOOL_NAME)
         if tool and tool:IsA("Tool") then
@@ -2176,7 +2114,6 @@ do
         if grappleMovementConnection then grappleMovementConnection:Disconnect() grappleMovementConnection = nil end
         
         clearGrappleLine()
-        restoreAllParts()
         button.Text = "Grapple to Brainrot"
         button.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
         
@@ -2201,7 +2138,6 @@ do
         if plr == player then
             if grappleMovementConnection then grappleMovementConnection:Disconnect() end
             clearGrappleLine()
-            restoreAllParts()
         end
     end)
 end
