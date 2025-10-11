@@ -619,72 +619,6 @@ player.CameraMaxZoomDistance = 50
 player.CameraMinZoomDistance = 0.5
 
 
--- =======================
--- UNKILLABLE PLAYER BLOCK
--- =======================
-do
-    local player = game.Players.LocalPlayer
-    local RunService = game:GetService("RunService")
-    local FORCE_HEALTH = 100
-    local FORCE_MAX_HEALTH = 100
-    local function makeUnkillable(player)
-        local function setupCharacter(character)
-            local humanoid = character:FindFirstChild("Humanoid") or character:WaitForChild("Humanoid", 10)
-            if humanoid then
-                humanoid.MaxHealth = FORCE_MAX_HEALTH
-                humanoid.Health = FORCE_HEALTH
-                -- Prevent health from decreasing
-                local healthConnection
-                healthConnection = humanoid.HealthChanged:Connect(function(health)
-                    if health < FORCE_HEALTH then
-                        humanoid.Health = FORCE_HEALTH
-                    end
-                end)
-                -- Prevent max health changes
-                local maxHealthConnection
-                maxHealthConnection = humanoid:GetPropertyChangedSignal("MaxHealth"):Connect(function()
-                    if humanoid.MaxHealth ~= FORCE_MAX_HEALTH then
-                        humanoid.MaxHealth = FORCE_MAX_HEALTH
-                        humanoid.Health = FORCE_HEALTH
-                    end
-                end)
-                -- Prevent death
-                local diedConnection
-                diedConnection = humanoid.Died:Connect(function()
-                    humanoid.Health = FORCE_HEALTH
-                    humanoid:ChangeState(Enum.HumanoidStateType.Running)
-                end)
-                -- Prevent state changes that could lead to death
-                humanoid.StateChanged:Connect(function(_, newState)
-                    if newState == Enum.HumanoidStateType.Dead then
-                        humanoid:ChangeState(Enum.HumanoidStateType.Running)
-                        humanoid.Health = FORCE_HEALTH
-                    end
-                end)
-                -- Continuous health monitoring
-                local heartbeat
-                heartbeat = RunService.Heartbeat:Connect(function()
-                    if humanoid.Parent then
-                        if humanoid.Health < FORCE_HEALTH then humanoid.Health = FORCE_HEALTH end
-                        if humanoid.MaxHealth ~= FORCE_MAX_HEALTH then humanoid.MaxHealth = FORCE_MAX_HEALTH end
-                    end
-                end)
-                -- Clean up connections when character is removed
-                character.AncestryChanged:Connect(function()
-                    if not character.Parent then
-                        if healthConnection then healthConnection:Disconnect() end
-                        if maxHealthConnection then maxHealthConnection:Disconnect() end
-                        if diedConnection then diedConnection:Disconnect() end
-                        if heartbeat then heartbeat:Disconnect() end
-                    end
-                end)
-            end
-        end
-        if player.Character then setupCharacter(player.Character) end
-        player.CharacterAdded:Connect(setupCharacter)
-    end
-    makeUnkillable(player)
-end
 --// =======================
 --// FULLBRIGHT + MATERIALS + DECORATIONS
 --// =======================
@@ -1513,13 +1447,38 @@ do
 end
 
 --// =======================
---// DESYNC/FLING BLOCK
+
+--// DESYNC & GODMODE
 --// =======================
+
 do
-    local Character = player.Character or player.CharacterAdded:Wait()
+    local player = game.Players.LocalPlayer
+    local character = player.Character
+
+    -- Godmode Script First
+    if character then
+        local humanoid = character:FindFirstChild("Humanoid")
+        if humanoid then
+            humanoid.MaxHealth = math.huge
+            humanoid.Health = math.huge
+            
+            humanoid:GetPropertyChangedSignal("Health"):Connect(function()
+                humanoid.Health = math.huge
+            end)
+        end
+    end
+
+    -- Desync/Remote Event Script
+    local Players = game:GetService("Players")
+    local RunService = game:GetService("RunService")
+    local UserInputService = game:GetService("UserInputService")
+    local PhysicsService = game:GetService("PhysicsService")
+    local TweenService = game:GetService("TweenService")
+    local LocalPlayer = Players.LocalPlayer
+    local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
     local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
     local Humanoid = Character:WaitForChild("Humanoid")
-    
+
     local DESYNC_ENABLED = false
     local FAKE_POSITION = nil
     local UPDATE_INTERVAL = 0.5 
@@ -1528,8 +1487,70 @@ do
     local DEBOUNCE = false
     local LAST_F_PRESS = 0
     local DOUBLE_PRESS_THRESHOLD = 0.3
-    local ORIGINAL_POSITION = nil
-    
+
+    -- Server position visualizer
+    local serverPosBox = nil
+
+    -- Function to create/update server position box
+    local function createServerPosBox()
+        if serverPosBox then
+            serverPosBox:Destroy()
+        end
+        
+        serverPosBox = Instance.new("Part")
+        serverPosBox.Name = "ServerPositionBox"
+        serverPosBox.Size = Vector3.new(4, 5, 3)
+        serverPosBox.Transparency = 0.7
+        serverPosBox.Color = Color3.fromRGB(255, 0, 0)
+        serverPosBox.Material = Enum.Material.Neon
+        serverPosBox.CanCollide = false
+        serverPosBox.Anchored = true
+        serverPosBox.Parent = workspace
+        
+        -- Add outline
+        local selectionBox = Instance.new("SelectionBox")
+        selectionBox.Adornee = serverPosBox
+        selectionBox.LineThickness = 0.05
+        selectionBox.Color3 = Color3.fromRGB(255, 255, 0)
+        selectionBox.Parent = serverPosBox
+        
+        -- Add text label above box
+        local billboardGui = Instance.new("BillboardGui")
+        billboardGui.Size = UDim2.new(0, 200, 0, 50)
+        billboardGui.StudsOffset = Vector3.new(0, 3, 0)
+        billboardGui.AlwaysOnTop = true
+        billboardGui.Parent = serverPosBox
+        
+        local textLabel = Instance.new("TextLabel")
+        textLabel.Size = UDim2.new(1, 0, 1, 0)
+        textLabel.BackgroundTransparency = 1
+        textLabel.Text = "WHERE OTHERS SEE YOU"
+        textLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+        textLabel.TextScaled = true
+        textLabel.Font = Enum.Font.GothamBold
+        textLabel.TextStrokeTransparency = 0
+        textLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+        textLabel.Parent = billboardGui
+    end
+
+    -- Function to update server position box
+    local function updateServerPosBox()
+        if DESYNC_ENABLED and HumanoidRootPart and FAKE_POSITION then
+            if not serverPosBox then
+                createServerPosBox()
+            end
+            
+            -- Show box at fake/server position
+            serverPosBox.CFrame = FAKE_POSITION
+            serverPosBox.Transparency = 0.5
+        else
+            if serverPosBox then
+                serverPosBox.Transparency = 1
+            end
+        end
+    end
+
+    -- Create blur effect
     local function createBlurEffect()
         local blurEffect = Instance.new("BlurEffect")
         blurEffect.Name = "FlingBlur"
@@ -1537,114 +1558,64 @@ do
         blurEffect.Parent = game:GetService("Lighting")
         return blurEffect
     end
-    
+
     local blurEffect = createBlurEffect()
-    
-    local function createFlingGUI()
-        local screenGui = Instance.new("ScreenGui")
-        screenGui.Name = "FlingGUI"
-        screenGui.ResetOnSpawn = false
-        screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-        
-        local textLabel = Instance.new("TextLabel")
-        textLabel.Size = UDim2.new(1, 0, 1, 0)
-        textLabel.BackgroundTransparency = 1
-        textLabel.Text = "IF YOUR GETTING FLINGED ITS NORMAL JUST WAIT"
-        textLabel.TextColor3 = Color3.fromRGB(255, 165, 0)
-        textLabel.TextScaled = true
-        textLabel.Font = Enum.Font.GothamBold
-        textLabel.TextStrokeTransparency = 0
-        textLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
-        textLabel.Visible = false
-        textLabel.Parent = screenGui
-        
-        screenGui.Parent = game:GetService("CoreGui")
-        return screenGui
-    end
-    
-    local flingGUI = createFlingGUI()
-    local orangeText = flingGUI:FindFirstChild("TextLabel")
-    
-    local controlGui = Instance.new("ScreenGui")
-    controlGui.Name = "DesyncControl"
-    controlGui.ResetOnSpawn = false
-    controlGui.Parent = game:GetService("CoreGui")
-    
-    local toggleButton = Instance.new("TextButton")
-    toggleButton.Name = "ToggleButton"
-    toggleButton.Size = UDim2.new(0, 150, 0, 50)
-    toggleButton.Position = UDim2.new(0.5, -75, 0, 20)
-    toggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    toggleButton.Font = Enum.Font.SourceSansBold
-    toggleButton.TextSize = 20
-    toggleButton.Text = "Start Desync"
-    toggleButton.Parent = controlGui
-    
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 8)
-    corner.Parent = toggleButton
-    
-    local function toggleFlingEffects(enabled)
+
+    -- Function to toggle blur
+    local function toggleSyncEffects(enabled)
         if enabled then
-            if orangeText then
-                orangeText.Visible = true
-            end
-            
+            -- Max blur
             local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
             local tween = TweenService:Create(blurEffect, tweenInfo, {Size = 50})
             tween:Play()
         else
-            if orangeText then
-                orangeText.Visible = false
-            end
-            
+            -- Remove blur
             local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
             local tween = TweenService:Create(blurEffect, tweenInfo, {Size = 0})
             tween:Play()
         end
     end
-    
-    local function isOnGround()
-        if not Character or not HumanoidRootPart then return false end
+
+    -- Create GUI
+    local function createGUI()
+        local screenGui = Instance.new("ScreenGui")
+        screenGui.Name = "DesyncGUI"
+        screenGui.ResetOnSpawn = false
+        screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
         
-        local rayOrigin = HumanoidRootPart.Position
-        local rayDirection = Vector3.new(0, -5, 0)
-        local raycastParams = RaycastParams.new()
-        raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
-        raycastParams.FilterDescendantsInstances = {Character}
+        -- Start Button
+        local startButton = Instance.new("TextButton")
+        startButton.Size = UDim2.new(0, 100, 0, 40)
+        startButton.Position = UDim2.new(0, 10, 0, 10)
+        startButton.BackgroundColor3 = Color3.fromRGB(0, 100, 255)
+        startButton.Text = "START"
+        startButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        startButton.TextSize = 18
+        startButton.Font = Enum.Font.GothamBold
+        startButton.BorderSizePixel = 0
+        startButton.Parent = screenGui
         
-        local raycastResult = workspace:Raycast(rayOrigin, rayDirection, raycastParams)
-        return raycastResult ~= nil
+        local startCorner = Instance.new("UICorner")
+        startCorner.CornerRadius = UDim.new(0, 8)
+        startCorner.Parent = startButton
+        
+        screenGui.Parent = game:GetService("CoreGui")
+        return screenGui, startButton
     end
-    
-    local function teleportToGround()
-        if not Character or not HumanoidRootPart then return end
-        
-        local rayOrigin = HumanoidRootPart.Position
-        local rayDirection = Vector3.new(0, -1000, 0)
-        local raycastParams = RaycastParams.new()
-        raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
-        raycastParams.FilterDescendantsInstances = {Character}
-        
-        local raycastResult = workspace:Raycast(rayOrigin, rayDirection, raycastParams)
-        
-        if raycastResult then
-            local groundPosition = raycastResult.Position + Vector3.new(0, 3, 0)
-            HumanoidRootPart.CFrame = CFrame.new(groundPosition)
-            HumanoidRootPart.Velocity = Vector3.new(0, 0, 0)
-            HumanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-            HumanoidRootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-        end
-    end
-    
-    print("Desync script loaded - Use GUI button to toggle")
-    
+
+    local gui, startBtn = createGUI()
+
+    -- First print statement
+    print("hello " .. LocalPlayer.DisplayName .. " if ur anti hit aint working anymore press the desync button or press f again ty")
+
+    -- Second print statement
+    print("TUTORIAL: just press the button then it should work IF IT DOSENT HERES AN TUTORIAL FOR PC NOT MOBILE IT SHOULD WORK IF U PRESS THE BUTTON IM SURE. PRESS F 2x if u dont wanna press the button then it should work too")
+
     pcall(function()
         PhysicsService:RegisterCollisionGroup("NoCollide")
         PhysicsService:CollisionGroupSetCollidable("NoCollide", "Default", false)
     end)
-    
+
     local function applyFFlags(enable)
         pcall(function()
             if enable then
@@ -1672,12 +1643,12 @@ do
             end
         end)
     end
-    
+
     local function setClientOwnership()
         for _, part in pairs(Character:GetDescendants()) do
             if part:IsA("BasePart") then
                 pcall(function()
-                    part:SetNetworkOwner(player)
+                    part:SetNetworkOwner(LocalPlayer)
                     part.Anchored = false
                     if DESYNC_ENABLED then
                         part.CollisionGroup = "NoCollide"
@@ -1690,99 +1661,75 @@ do
             end
         end
         pcall(function()
-            sethiddenproperty(player, "SimulationRadius", 99999)
+            sethiddenproperty(LocalPlayer, "SimulationRadius", 99999)
         end)
     end
-    
+
     local function initializeDesync()
         if HumanoidRootPart then
             FAKE_POSITION = HumanoidRootPart.CFrame
             setClientOwnership()
             applyFFlags(true)
+            createServerPosBox()
         end
     end
-    
+
     local function toggleDesync()
         DESYNC_ENABLED = not DESYNC_ENABLED
         if DESYNC_ENABLED then
             initializeDesync()
-            toggleButton.Text = "Stop Desync"
-            toggleButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
         else
             applyFFlags(false)
             setClientOwnership()
-            toggleButton.Text = "Start Desync"
-            toggleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+            if serverPosBox then
+                serverPosBox:Destroy()
+                serverPosBox = nil
+            end
         end
     end
-    
-    local function smartFling()
+
+    -- ONLY USE REMOTE EVENT - NO FLINGING AT ALL
+    local function fireQuantumTeleport()
         if not Character or not HumanoidRootPart then return end
         
-        toggleFlingEffects(true)
+        toggleSyncEffects(true)
         
-        ORIGINAL_POSITION = HumanoidRootPart.CFrame
-        local originalGravity = workspace.Gravity
+        -- Fire the QuantumCloner teleport event
+        local Event = game:GetService("ReplicatedStorage").Packages.Net["RE/QuantumCloner/OnTeleport"]
+        Event:FireServer()
         
-        workspace.Gravity = 50
+        print("Fired QuantumCloner teleport event!")
         
-        local flingForce = Vector3.new(
-            math.random(-200, 200),
-            math.random(150, 250),
-            math.random(-200, 200)
-        )
+        -- Brief wait for server to process
+        wait(0.3)
         
-        HumanoidRootPart.Velocity = flingForce
-        
-        local flingStartTime = tick()
-        local groundCheckConnection
-        
-        groundCheckConnection = RunService.Heartbeat:Connect(function()
-            local elapsedTime = tick() - flingStartTime
-            
-            if elapsedTime >= 2.5 or isOnGround() then
-                HumanoidRootPart.Velocity = Vector3.new(0, 0, 0)
-                HumanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-                HumanoidRootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-                
-                groundCheckConnection:Disconnect()
-            end
-        end)
-        
-        wait(2.5)
-        
-        if groundCheckConnection then
-            groundCheckConnection:Disconnect()
-        end
-        
-        if ORIGINAL_POSITION then
-            HumanoidRootPart.CFrame = ORIGINAL_POSITION
-            HumanoidRootPart.Velocity = Vector3.new(0, 0, 0)
-            HumanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-            HumanoidRootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-        end
-        
-        workspace.Gravity = originalGravity
-        
-        teleportToGround()
-        
-        wait(0.1)
-        toggleFlingEffects(false)
+        toggleSyncEffects(false)
     end
-    
-    toggleButton.MouseButton1Click:Connect(function()
-        if not DEBOUNCE then
-            DEBOUNCE = true
-            toggleButton.Active = false
-            
-            toggleDesync()
-            
-            wait(0.3)
-            toggleButton.Active = true
-            DEBOUNCE = false
+
+    -- Auto F spam function - Fire remote event FIRST, then 2x desync toggles
+    local function spamF()
+        -- FIRE REMOTE EVENT FIRST
+        local Event = game:GetService("ReplicatedStorage").Packages.Net["RE/QuantumCloner/OnTeleport"]
+        Event:FireServer()
+        print("Fired QuantumCloner teleport event FIRST!")
+        wait(0.5)
+        
+        -- Then do the desync toggles
+        for i = 1, 2 do
+            if not DEBOUNCE then
+                DEBOUNCE = true
+                toggleDesync()
+                wait(1)
+                DEBOUNCE = false
+            end
         end
+    end
+
+    -- Button Connection
+    startBtn.MouseButton1Click:Connect(function()
+        spamF()
     end)
-    
+
     RunService.RenderStepped:Connect(function()
         if not DESYNC_ENABLED or not Character or not HumanoidRootPart then return end
         Humanoid:ChangeState(Enum.HumanoidStateType.Running)
@@ -1796,8 +1743,11 @@ do
                 )
             end
         end
+        
+        -- Update server position box
+        updateServerPosBox()
     end)
-    
+
     RunService.Heartbeat:Connect(function()
         if not DESYNC_ENABLED or not Character or not HumanoidRootPart or not FAKE_POSITION then return end
         if tick() - lastUpdate >= UPDATE_INTERVAL then
@@ -1814,7 +1764,7 @@ do
             lastUpdate = tick()
         end
     end)
-    
+
     UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if gameProcessed or DEBOUNCE or input.KeyCode ~= Enum.KeyCode.F then return end
         
@@ -1823,7 +1773,7 @@ do
         if currentTime - LAST_F_PRESS <= DOUBLE_PRESS_THRESHOLD then
             if not DEBOUNCE then
                 DEBOUNCE = true
-                smartFling()
+                fireQuantumTeleport()
                 wait(0.5)
                 DEBOUNCE = false
             end
@@ -1838,12 +1788,13 @@ do
         
         LAST_F_PRESS = currentTime
     end)
-    
-    player.CharacterAdded:Connect(function(newChar)
+
+    LocalPlayer.CharacterAdded:Connect(function(newChar)
         Character = newChar
         HumanoidRootPart = newChar:WaitForChild("HumanoidRootPart")
         Humanoid = newChar:WaitForChild("Humanoid")
         
+        -- Reapply godmode on respawn
         if Humanoid then
             Humanoid.MaxHealth = math.huge
             Humanoid.Health = math.huge
@@ -1858,17 +1809,424 @@ do
             initializeDesync()
         end
     end)
-    
+
+    -- Clean up effects when script ends
     game:GetService("Lighting").ChildRemoved:Connect(function(child)
         if child.Name == "FlingBlur" then
             blurEffect = createBlurEffect()
         end
     end)
-    
+
+    -- Recreate GUI if removed
     game:GetService("CoreGui").ChildRemoved:Connect(function(child)
-        if child.Name == "FlingGUI" then
-            flingGUI = createFlingGUI()
-            orangeText = flingGUI:FindFirstChild("TextLabel")
+        if child.Name == "DesyncGUI" then
+            gui, startBtn = createGUI()
+            -- Reconnect button
+            startBtn.MouseButton1Click:Connect(function()
+                spamF()
+            end)
+        end
+    end)
+end
+
+--// =======================
+--// SILENT BEST PET TRACKER + AUTO GRAPPLE
+--// =======================
+
+do
+    local Players = game:GetService("Players")
+    local RunService = game:GetService("RunService")
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local player = Players.LocalPlayer
+
+    local FIRE_INTERVAL = 0.1
+    local GRAPPLE_SPEED = 150
+    local GRAPPLE_TOOL_NAME = "Grapple Hook"
+    local HORIZONTAL_DISTANCE = 25
+    local SMOOTH_RADIUS = 80
+
+    local function parseMoney(text)
+        text = string.lower(text or "")
+        local num = tonumber(text:match("[%d%.]+")) or 0
+        if text:find("k") then num *= 1e3
+        elseif text:find("m") then num *= 1e6
+        elseif text:find("b") then num *= 1e9
+        elseif text:find("t") then num *= 1e12 end
+        return num
+    end
+
+    local function isBlacklisted(obj)
+        while obj do
+            local name = string.lower(obj.Name or "")
+            if name == "generationboard" or name:find("top") then return true end
+            obj = obj.Parent
+        end
+        return false
+    end
+
+    local function getModelForLabel(label)
+        local bb = label:FindFirstAncestorWhichIsA("BillboardGui")
+        if bb then
+            if bb.Adornee and bb.Adornee:IsA("BasePart") then
+                local m = bb.Adornee:FindFirstAncestorWhichIsA("Model")
+                if m then return m end
+            end
+            if bb.Parent and bb.Parent:IsA("Model") then return bb.Parent end
+        end
+        return label:FindFirstAncestorWhichIsA("Model")
+    end
+
+    local function getAnyPart(model)
+        if not model then return nil end
+        return model.PrimaryPart or model:FindFirstChild("HumanoidRootPart") or model:FindFirstChildWhichIsA("BasePart")
+    end
+
+    local currentPart = nil
+
+    local function updateBest()
+        local bestLabel, bestValue = nil, -math.huge
+
+        for _, bb in ipairs(workspace:GetDescendants()) do
+            if bb:IsA("BillboardGui") and not isBlacklisted(bb) then
+                for _, lbl in ipairs(bb:GetDescendants()) do
+                    if lbl:IsA("TextLabel") then
+                        local text = lbl.Text or ""
+                        if text:find("/s") and text:find("%$") then
+                            local val = parseMoney(text)
+                            if val > bestValue then
+                                bestValue = val
+                                bestLabel = lbl
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        if not bestLabel then
+            currentPart = nil
+            return
+        end
+
+        local model = getModelForLabel(bestLabel)
+        local part = getAnyPart(model)
+        if not (model and part) then
+            currentPart = nil
+            return
+        end
+
+        currentPart = part
+    end
+
+    local grappleLine
+    local modifiedParts = {}
+
+    local function createGrappleLine(startPos, endPos)
+        if grappleLine then grappleLine:Destroy() end
+        
+        local distance = (endPos - startPos).Magnitude
+        local midpoint = (startPos + endPos) / 2
+        
+        grappleLine = Instance.new("Part")
+        grappleLine.Anchored = true
+        grappleLine.CanCollide = false
+        grappleLine.Size = Vector3.new(0.2, 0.2, distance)
+        grappleLine.CFrame = CFrame.lookAt(midpoint, endPos) * CFrame.new(0, 0, -distance / 2)
+        grappleLine.BrickColor = BrickColor.new("Bright green")
+        grappleLine.Material = Enum.Material.Neon
+        grappleLine.Parent = workspace
+    end
+
+    local function clearGrappleLine()
+        if grappleLine then
+            grappleLine:Destroy()
+            grappleLine = nil
+        end
+    end
+
+    local function makeSurroundingsSmooth(playerPos, character)
+        for part, originalProps in pairs(modifiedParts) do
+            if part and part.Parent then
+                part.Material = originalProps.Material
+                part.Shape = originalProps.Shape
+                if part:FindFirstChild("CustomPhysicalProperties") then
+                    part:FindFirstChild("CustomPhysicalProperties"):Destroy()
+                end
+                part.CustomPhysicalProperties = originalProps.CustomPhysicalProperties
+            end
+        end
+        modifiedParts = {}
+        
+        local region = Region3.new(
+            playerPos - Vector3.new(SMOOTH_RADIUS, SMOOTH_RADIUS, SMOOTH_RADIUS),
+            playerPos + Vector3.new(SMOOTH_RADIUS, SMOOTH_RADIUS, SMOOTH_RADIUS)
+        )
+        region = region:ExpandToGrid(4)
+        
+        local partsInRegion = workspace:FindPartsInRegion3(region, character, 500)
+        
+        for _, part in ipairs(partsInRegion) do
+            if part:IsA("BasePart") and part.Parent ~= character and not part:IsDescendantOf(character) then
+                local parent = part.Parent
+                if parent and (parent:FindFirstChild("Humanoid") or parent.Name == "Camera") then
+                    continue
+                end
+                
+                if not modifiedParts[part] then
+                    modifiedParts[part] = {
+                        Material = part.Material,
+                        Shape = part.Shape,
+                        CustomPhysicalProperties = part.CustomPhysicalProperties
+                    }
+                    
+                    if part:IsA("Part") then
+                        part.Shape = Enum.PartType.Cylinder
+                    end
+                    
+                    part.CustomPhysicalProperties = PhysicalProperties.new(0.7, 0.0, 0.0, 1, 1)
+                end
+            end
+        end
+    end
+
+    local function restoreAllParts()
+        for part, originalProps in pairs(modifiedParts) do
+            if part and part.Parent then
+                pcall(function()
+                    part.Material = originalProps.Material
+                    part.Shape = originalProps.Shape
+                    part.CustomPhysicalProperties = originalProps.CustomPhysicalProperties
+                end)
+            end
+        end
+        modifiedParts = {}
+    end
+
+    local character = player.Character or player.CharacterAdded:Wait()
+    local humanoid = character:WaitForChild("Humanoid")
+    local Event = ReplicatedStorage.Packages.Net["RE/UseItem"]
+
+    local movementConnection = nil
+    local fireConnection = nil
+    local isGrappling = false
+
+    local function findGrappleInBackpack()
+        local backpack = player:FindFirstChild("Backpack")
+        if backpack then
+            return backpack:FindFirstChild(GRAPPLE_TOOL_NAME)
+        end
+        return nil
+    end
+
+    local function isGrappleEquipped()
+        if character then
+            local tool = character:FindFirstChild(GRAPPLE_TOOL_NAME)
+            if tool and tool:IsA("Tool") then return true end
+        end
+        return false
+    end
+
+    local function fireGrappleHook()
+        if isGrappleEquipped() then
+            pcall(function()
+                Event:FireServer(0.70743885040283)
+            end)
+        end
+    end
+
+    local function grappleToPet()
+        if not currentPart or not character or not character:FindFirstChild("HumanoidRootPart") then
+            clearGrappleLine()
+            restoreAllParts()
+            return
+        end
+        
+        local rootPart = character.HumanoidRootPart
+        local targetPos = currentPart.Position + Vector3.new(0, 7, 0)
+        local currentPos = rootPart.Position
+        
+        createGrappleLine(currentPos, currentPart.Position)
+        makeSurroundingsSmooth(currentPos, character)
+        
+        local horizontalDistance = math.sqrt(
+            (targetPos.X - currentPos.X)^2 + 
+            (targetPos.Z - currentPos.Z)^2
+        )
+        
+        if horizontalDistance < HORIZONTAL_DISTANCE then
+            rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+            isGrappling = false
+            clearGrappleLine()
+            restoreAllParts()
+            
+            local tool = character:FindFirstChild(GRAPPLE_TOOL_NAME)
+            if tool and tool:IsA("Tool") then
+                humanoid:UnequipTools()
+            end
+            
+            if button then
+                button.Text = "Grapple to Brainrot"
+                button.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+            end
+            return
+        end
+        
+        local direction = (targetPos - currentPos).Unit
+        rootPart.AssemblyLinearVelocity = direction * GRAPPLE_SPEED
+        isGrappling = true
+    end
+
+    local function startFireLoop()
+        if fireConnection then return end
+        
+        fireConnection = task.spawn(function()
+            while character and character.Parent do
+                if isGrappling and isGrappleEquipped() then
+                    fireGrappleHook()
+                end
+                task.wait(FIRE_INTERVAL)
+            end
+        end)
+    end
+
+    local function startMovementLoop()
+        if movementConnection then movementConnection:Disconnect() end
+        
+        movementConnection = RunService.Heartbeat:Connect(function()
+            if isGrappling then
+                grappleToPet()
+            end
+        end)
+    end
+
+    local function stopGrappling()
+        isGrappling = false
+        if character and character:FindFirstChild("HumanoidRootPart") then
+            character.HumanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+        end
+        clearGrappleLine()
+        restoreAllParts()
+        
+        local tool = character:FindFirstChild(GRAPPLE_TOOL_NAME)
+        if tool and tool:IsA("Tool") then
+            humanoid:UnequipTools()
+        end
+        
+        if button then
+            button.Text = "Grapple to Brainrot"
+            button.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+        end
+    end
+
+    local function startGrappling()
+        if isGrappling then
+            stopGrappling()
+            return
+        end
+        
+        if not isGrappleEquipped() then
+            local grappleTool = findGrappleInBackpack()
+            if grappleTool then
+                humanoid:EquipTool(grappleTool)
+                task.wait(0.3)
+            else
+                warn("Grapple Hook not found in backpack")
+                return
+            end
+        end
+        
+        if not currentPart then
+            warn("No best pet found")
+            return
+        end
+        
+        isGrappling = true
+    end
+
+    local playerGui = player:WaitForChild("PlayerGui")
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "GrappleGui"
+    screenGui.ResetOnSpawn = false
+    screenGui.Parent = playerGui
+
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 150, 0, 50)
+    frame.Position = UDim2.new(0.5, -75, 0.1, 0)
+    frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    frame.BorderSizePixel = 2
+    frame.BorderColor3 = Color3.fromRGB(0, 255, 0)
+    frame.Active = true
+    frame.Draggable = true
+    frame.Parent = screenGui
+
+    local button = Instance.new("TextButton")
+    button.Size = UDim2.new(1, -10, 1, -10)
+    button.Position = UDim2.new(0, 5, 0, 5)
+    button.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+    button.BorderSizePixel = 0
+    button.Font = Enum.Font.SourceSansBold
+    button.TextSize = 18
+    button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    button.Text = "Grapple to Brainrot"
+    button.Parent = frame
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = frame
+
+    local buttonCorner = Instance.new("UICorner")
+    buttonCorner.CornerRadius = UDim.new(0, 6)
+    buttonCorner.Parent = button
+
+    button.MouseButton1Click:Connect(function()
+        if isGrappling then
+            stopGrappling()
+        else
+            button.Text = "Stop Grapple"
+            button.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
+            startGrappling()
+        end
+    end)
+
+    local function initialize()
+        startFireLoop()
+        startMovementLoop()
+    end
+
+    local function onCharacterAdded(newCharacter)
+        character = newCharacter
+        humanoid = character:WaitForChild("Humanoid")
+        isGrappling = false
+        
+        if movementConnection then movementConnection:Disconnect() movementConnection = nil end
+        
+        clearGrappleLine()
+        restoreAllParts()
+        button.Text = "Grapple to Brainrot"
+        button.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+        
+        task.wait(1)
+        initialize()
+    end
+
+    player.CharacterAdded:Connect(onCharacterAdded)
+
+    if character and character.Parent then
+        initialize()
+    end
+
+    task.spawn(function()
+        while true do
+            updateBest()
+            task.wait(1)
+        end
+    end)
+
+    Players.PlayerRemoving:Connect(function(plr)
+        if plr == player then
+            if movementConnection then movementConnection:Disconnect() end
+            clearGrappleLine()
+            restoreAllParts()
         end
     end)
 end
