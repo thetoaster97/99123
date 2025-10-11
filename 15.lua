@@ -1839,7 +1839,6 @@ do
     local ReplicatedStorage = game:GetService("ReplicatedStorage")
     local player = Players.LocalPlayer
 
-    local FIRE_INTERVAL = 0.1
     local GRAPPLE_SPEED = 150
     local GRAPPLE_TOOL_NAME = "Grapple Hook"
     local HORIZONTAL_DISTANCE = 25
@@ -2004,11 +2003,9 @@ do
 
     local character = player.Character or player.CharacterAdded:Wait()
     local humanoid = character:WaitForChild("Humanoid")
-    local Event = ReplicatedStorage.Packages.Net["RE/UseItem"]
 
-    local movementConnection = nil
-    local fireConnection = nil
-    local isGrappling = false
+    local grappleMovementConnection = nil
+    local isAutoGrappling = false
 
     local function findGrappleInBackpack()
         local backpack = player:FindFirstChild("Backpack")
@@ -2024,14 +2021,6 @@ do
             if tool and tool:IsA("Tool") then return true end
         end
         return false
-    end
-
-    local function fireGrappleHook()
-        if isGrappleEquipped() then
-            pcall(function()
-                Event:FireServer(0.70743885040283)
-            end)
-        end
     end
 
     local function grappleToPet()
@@ -2055,7 +2044,7 @@ do
         
         if horizontalDistance < HORIZONTAL_DISTANCE then
             rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-            isGrappling = false
+            isAutoGrappling = false
             clearGrappleLine()
             restoreAllParts()
             
@@ -2073,34 +2062,21 @@ do
         
         local direction = (targetPos - currentPos).Unit
         rootPart.AssemblyLinearVelocity = direction * GRAPPLE_SPEED
-        isGrappling = true
+        isAutoGrappling = true
     end
 
-    local function startFireLoop()
-        if fireConnection then return end
+    local function startGrappleMovementLoop()
+        if grappleMovementConnection then grappleMovementConnection:Disconnect() end
         
-        fireConnection = task.spawn(function()
-            while character and character.Parent do
-                if isGrappling and isGrappleEquipped() then
-                    fireGrappleHook()
-                end
-                task.wait(FIRE_INTERVAL)
-            end
-        end)
-    end
-
-    local function startMovementLoop()
-        if movementConnection then movementConnection:Disconnect() end
-        
-        movementConnection = RunService.Heartbeat:Connect(function()
-            if isGrappling then
+        grappleMovementConnection = RunService.Heartbeat:Connect(function()
+            if isAutoGrappling then
                 grappleToPet()
             end
         end)
     end
 
     local function stopGrappling()
-        isGrappling = false
+        isAutoGrappling = false
         if character and character:FindFirstChild("HumanoidRootPart") then
             character.HumanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
         end
@@ -2119,7 +2095,7 @@ do
     end
 
     local function startGrappling()
-        if isGrappling then
+        if isAutoGrappling then
             stopGrappling()
             return
         end
@@ -2140,7 +2116,7 @@ do
             return
         end
         
-        isGrappling = true
+        isAutoGrappling = true
     end
 
     local playerGui = player:WaitForChild("PlayerGui")
@@ -2179,7 +2155,7 @@ do
     buttonCorner.Parent = button
 
     button.MouseButton1Click:Connect(function()
-        if isGrappling then
+        if isAutoGrappling then
             stopGrappling()
         else
             button.Text = "Stop Grapple"
@@ -2189,16 +2165,15 @@ do
     end)
 
     local function initialize()
-        startFireLoop()
-        startMovementLoop()
+        startGrappleMovementLoop()
     end
 
     local function onCharacterAdded(newCharacter)
         character = newCharacter
         humanoid = character:WaitForChild("Humanoid")
-        isGrappling = false
+        isAutoGrappling = false
         
-        if movementConnection then movementConnection:Disconnect() movementConnection = nil end
+        if grappleMovementConnection then grappleMovementConnection:Disconnect() grappleMovementConnection = nil end
         
         clearGrappleLine()
         restoreAllParts()
@@ -2224,7 +2199,7 @@ do
 
     Players.PlayerRemoving:Connect(function(plr)
         if plr == player then
-            if movementConnection then movementConnection:Disconnect() end
+            if grappleMovementConnection then grappleMovementConnection:Disconnect() end
             clearGrappleLine()
             restoreAllParts()
         end
