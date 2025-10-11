@@ -1113,20 +1113,29 @@ do
 end
 
 --// =======================
---// AUTO-KICK ON "YOU STOLE" DETECTION (INCLUDES ITEM NAME)
+--// AUTO-KICK ON "YOU STOLE" DETECTION (CLEAN TEXT, NO RICHTEXT TAGS)
 --// =======================
 do
     local playerGui = player:WaitForChild("PlayerGui")
+
+    -- Helper: remove <font>, <b>, <i>, etc. tags
+    local function stripRichTextTags(text)
+        if typeof(text) ~= "string" then
+            return ""
+        end
+        return (text:gsub("<[^>]->", "")) -- removes all <...> tags
+    end
 
     -- Helper: detect if text contains "you stole" (case-insensitive)
     local function getYouStoleText(text)
         if typeof(text) ~= "string" then
             return nil
         end
-        local lowerText = string.lower(text)
+        local cleanText = stripRichTextTags(text)
+        local lowerText = string.lower(cleanText)
         local startPos = string.find(lowerText, "you stole", 1, true)
         if startPos then
-            return text -- return the full text as-is
+            return cleanText
         end
         return nil
     end
