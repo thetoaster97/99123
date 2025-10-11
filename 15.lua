@@ -1830,7 +1830,6 @@ do
 end
 
 --// =======================
-
 --// SILENT BEST PET TRACKER + AUTO GRAPPLE
 --// =======================
 
@@ -1842,7 +1841,7 @@ do
 
     local GRAPPLE_SPEED = 150
     local GRAPPLE_TOOL_NAME = "Grapple Hook"
-    local HORIZONTAL_DISTANCE = 25
+    local HORIZONTAL_DISTANCE = 10
     local SMOOTH_RADIUS = 80
 
     local function parseMoney(text)
