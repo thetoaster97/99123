@@ -1470,388 +1470,408 @@ do
     print("Anti-ragdoll loaded")
 end
 
---// =======================
+-- =======================
 
---// DESYNC & GODMODE
---// =======================
+-- DESYNC/ANTI-HIT SCRIPT
+-- =======================
 
-do
-    local player = game.Players.LocalPlayer
-    local character = player.Character
+local player = game.Players.LocalPlayer
+local character = player.Character
 
-    -- Godmode Script First
-    if character then
-        local humanoid = character:FindFirstChild("Humanoid")
-        if humanoid then
-            humanoid.MaxHealth = math.huge
+-- Godmode Script First
+if character then
+    local humanoid = character:FindFirstChild("Humanoid")
+    if humanoid then
+        humanoid.MaxHealth = math.huge
+        humanoid.Health = math.huge
+        
+        humanoid:GetPropertyChangedSignal("Health"):Connect(function()
             humanoid.Health = math.huge
-            
-            humanoid:GetPropertyChangedSignal("Health"):Connect(function()
-                humanoid.Health = math.huge
-            end)
-        end
-    end
-
-    -- Desync/Remote Event Script
-    local Players = game:GetService("Players")
-    local RunService = game:GetService("RunService")
-    local UserInputService = game:GetService("UserInputService")
-    local PhysicsService = game:GetService("PhysicsService")
-    local TweenService = game:GetService("TweenService")
-    local LocalPlayer = Players.LocalPlayer
-    local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-    local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
-    local Humanoid = Character:WaitForChild("Humanoid")
-
-    local DESYNC_ENABLED = false
-    local FAKE_POSITION = nil
-    local UPDATE_INTERVAL = 0.5 
-    local lastUpdate = tick()
-    local OFFSET_RANGE = 4 
-    local DEBOUNCE = false
-    local LAST_F_PRESS = 0
-    local DOUBLE_PRESS_THRESHOLD = 0.3
-
-    -- Server position visualizer
-    local serverPosBox = nil
-
-    -- Function to create/update server position box
-    local function createServerPosBox()
-        if serverPosBox then
-            serverPosBox:Destroy()
-        end
-        
-        serverPosBox = Instance.new("Part")
-        serverPosBox.Name = "ServerPositionBox"
-        serverPosBox.Size = Vector3.new(4, 5, 3)
-        serverPosBox.Transparency = 0.7
-        serverPosBox.Color = Color3.fromRGB(255, 0, 0)
-        serverPosBox.Material = Enum.Material.Neon
-        serverPosBox.CanCollide = false
-        serverPosBox.Anchored = true
-        serverPosBox.Parent = workspace
-        
-        -- Add outline
-        local selectionBox = Instance.new("SelectionBox")
-        selectionBox.Adornee = serverPosBox
-        selectionBox.LineThickness = 0.05
-        selectionBox.Color3 = Color3.fromRGB(255, 255, 0)
-        selectionBox.Parent = serverPosBox
-        
-        -- Add text label above box
-        local billboardGui = Instance.new("BillboardGui")
-        billboardGui.Size = UDim2.new(0, 200, 0, 50)
-        billboardGui.StudsOffset = Vector3.new(0, 3, 0)
-        billboardGui.AlwaysOnTop = true
-        billboardGui.Parent = serverPosBox
-        
-        local textLabel = Instance.new("TextLabel")
-        textLabel.Size = UDim2.new(1, 0, 1, 0)
-        textLabel.BackgroundTransparency = 1
-        textLabel.Text = "WHERE OTHERS SEE YOU"
-        textLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
-        textLabel.TextScaled = true
-        textLabel.Font = Enum.Font.GothamBold
-        textLabel.TextStrokeTransparency = 0
-        textLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
-        textLabel.Parent = billboardGui
-    end
-
-    -- Function to update server position box
-    local function updateServerPosBox()
-        if DESYNC_ENABLED and HumanoidRootPart and FAKE_POSITION then
-            if not serverPosBox then
-                createServerPosBox()
-            end
-            
-            -- Show box at fake/server position
-            serverPosBox.CFrame = FAKE_POSITION
-            serverPosBox.Transparency = 0.5
-        else
-            if serverPosBox then
-                serverPosBox.Transparency = 1
-            end
-        end
-    end
-
-    -- Create blur effect
-    local function createBlurEffect()
-        local blurEffect = Instance.new("BlurEffect")
-        blurEffect.Name = "FlingBlur"
-        blurEffect.Size = 0
-        blurEffect.Parent = game:GetService("Lighting")
-        return blurEffect
-    end
-
-    local blurEffect = createBlurEffect()
-
-    -- Function to toggle blur
-    local function toggleSyncEffects(enabled)
-        if enabled then
-            -- Max blur
-            local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-            local tween = TweenService:Create(blurEffect, tweenInfo, {Size = 50})
-            tween:Play()
-        else
-            -- Remove blur
-            local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-            local tween = TweenService:Create(blurEffect, tweenInfo, {Size = 0})
-            tween:Play()
-        end
-    end
-
-    -- Create GUI
-    local function createGUI()
-        local screenGui = Instance.new("ScreenGui")
-        screenGui.Name = "DesyncGUI"
-        screenGui.ResetOnSpawn = false
-        screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-        
-        -- Start Button
-        local startButton = Instance.new("TextButton")
-        startButton.Size = UDim2.new(0, 100, 0, 40)
-        startButton.Position = UDim2.new(0, 10, 0, 10)
-        startButton.BackgroundColor3 = Color3.fromRGB(0, 100, 255)
-        startButton.Text = "START"
-        startButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-        startButton.TextSize = 18
-        startButton.Font = Enum.Font.GothamBold
-        startButton.BorderSizePixel = 0
-        startButton.Parent = screenGui
-        
-        local startCorner = Instance.new("UICorner")
-        startCorner.CornerRadius = UDim.new(0, 8)
-        startCorner.Parent = startButton
-        
-        screenGui.Parent = game:GetService("CoreGui")
-        return screenGui, startButton
-    end
-
-    local gui, startBtn = createGUI()
-
-    -- First print statement
-    print("hello " .. LocalPlayer.DisplayName .. "  Thelueckster tells you to lock in")
-
-    -- Second print statement
-    print("good luck")
-
-    pcall(function()
-        PhysicsService:RegisterCollisionGroup("NoCollide")
-        PhysicsService:CollisionGroupSetCollidable("NoCollide", "Default", false)
-    end)
-
-    local function applyFFlags(enable)
-        pcall(function()
-            if enable then
-                setfflag("WorldStepMax", "-1000000")
-                setfflag("DFIntS2PhysicsSenderRate", "1")
-                setfflag("DFIntAssemblyExtentsExpansionStudHundredth", "1000")
-                setfflag("FFlagRakNetForceUseUnreliable", "True")
-                setfflag("FFlagDebugDisableTelemetryV2Event", "True")
-                setfflag("DFIntNetworkLatencyTolerance", "9999")
-                setfflag("DFIntTaskSchedulerTargetFps", "1")
-                setfflag("DFIntNetworkPhysicsSenderRate", "1")
-                setfflag("DFIntNetworkPhysicsRate", "1")
-                setfflag("DFIntCharacterCollisionUpdateRate", "1")
-                setfflag("DFIntCharacterControllerUpdateRate", "1")
-            else
-                setfflag("WorldStepMax", "0")
-                setfflag("DFIntS2PhysicsSenderRate", "60")
-                setfflag("DFIntAssemblyExtentsExpansionStudHundredth", "0")
-                setfflag("DFIntNetworkLatencyTolerance", "100")
-                setfflag("DFIntTaskSchedulerTargetFps", "60")
-                setfflag("DFIntNetworkPhysicsSenderRate", "60")
-                setfflag("DFIntNetworkPhysicsRate", "60")
-                setfflag("DFIntCharacterCollisionUpdateRate", "30")
-                setfflag("DFIntCharacterControllerUpdateRate", "30")
-            end
         end)
     end
+end
 
-    local function setClientOwnership()
-        for _, part in pairs(Character:GetDescendants()) do
-            if part:IsA("BasePart") then
-                pcall(function()
-                    part:SetNetworkOwner(LocalPlayer)
-                    part.Anchored = false
-                    if DESYNC_ENABLED then
-                        part.CollisionGroup = "NoCollide"
-                        part.CanCollide = false
-                    else
-                        part.CollisionGroup = "Default"
-                        part.CanCollide = true
-                    end
-                end)
-            end
-        end
-        pcall(function()
-            sethiddenproperty(LocalPlayer, "SimulationRadius", 99999)
-        end)
+-- Desync/Remote Event Script
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local PhysicsService = game:GetService("PhysicsService")
+local TweenService = game:GetService("TweenService")
+local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+local Humanoid = Character:WaitForChild("Humanoid")
+
+local DESYNC_ENABLED = false
+local FAKE_POSITION = nil
+local CLIENT_POSITION = nil
+local UPDATE_INTERVAL = 0.5 
+local lastUpdate = tick()
+local OFFSET_RANGE = 4 
+local DEBOUNCE = false
+local LAST_F_PRESS = 0
+local DOUBLE_PRESS_THRESHOLD = 0.3
+
+-- Server position visualizer
+local serverPosBox = nil
+
+-- Function to create/update server position box
+local function createServerPosBox()
+    if serverPosBox then
+        serverPosBox:Destroy()
     end
+    
+    serverPosBox = Instance.new("Part")
+    serverPosBox.Name = "ServerPositionBox"
+    serverPosBox.Size = Vector3.new(4, 5, 3)
+    serverPosBox.Transparency = 0.7
+    serverPosBox.Color = Color3.fromRGB(255, 0, 0)
+    serverPosBox.Material = Enum.Material.Neon
+    serverPosBox.CanCollide = false
+    serverPosBox.Anchored = true
+    serverPosBox.Parent = workspace
+    
+    -- Add outline
+    local selectionBox = Instance.new("SelectionBox")
+    selectionBox.Adornee = serverPosBox
+    selectionBox.LineThickness = 0.05
+    selectionBox.Color3 = Color3.fromRGB(255, 255, 0)
+    selectionBox.Parent = serverPosBox
+    
+    -- Add text label above box
+    local billboardGui = Instance.new("BillboardGui")
+    billboardGui.Size = UDim2.new(0, 200, 0, 50)
+    billboardGui.StudsOffset = Vector3.new(0, 3, 0)
+    billboardGui.AlwaysOnTop = true
+    billboardGui.Parent = serverPosBox
+    
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Size = UDim2.new(1, 0, 1, 0)
+    textLabel.BackgroundTransparency = 1
+    textLabel.Text = "WHERE OTHERS SEE YOU"
+    textLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+    textLabel.TextScaled = true
+    textLabel.Font = Enum.Font.GothamBold
+    textLabel.TextStrokeTransparency = 0
+    textLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+    textLabel.Parent = billboardGui
+end
 
-    local function initializeDesync()
-        if HumanoidRootPart then
-            FAKE_POSITION = HumanoidRootPart.CFrame
-            setClientOwnership()
-            applyFFlags(true)
+-- Function to update server position box
+local function updateServerPosBox()
+    if DESYNC_ENABLED and HumanoidRootPart and FAKE_POSITION then
+        if not serverPosBox then
             createServerPosBox()
         end
+        
+        -- Show box at fake/server position
+        serverPosBox.CFrame = FAKE_POSITION
+        serverPosBox.Transparency = 0.5
+    else
+        if serverPosBox then
+            serverPosBox.Transparency = 1
+        end
     end
+end
 
-    local function toggleDesync()
-        DESYNC_ENABLED = not DESYNC_ENABLED
-        if DESYNC_ENABLED then
-            initializeDesync()
+-- Create blur effect
+local function createBlurEffect()
+    local blurEffect = Instance.new("BlurEffect")
+    blurEffect.Name = "FlingBlur"
+    blurEffect.Size = 0
+    blurEffect.Parent = game:GetService("Lighting")
+    return blurEffect
+end
+
+local blurEffect = createBlurEffect()
+
+-- Function to toggle blur
+local function toggleSyncEffects(enabled)
+    if enabled then
+        -- Max blur
+        local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        local tween = TweenService:Create(blurEffect, tweenInfo, {Size = 50})
+        tween:Play()
+    else
+        -- Remove blur
+        local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        local tween = TweenService:Create(blurEffect, tweenInfo, {Size = 0})
+        tween:Play()
+    end
+end
+
+-- Create GUI
+local function createGUI()
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "DesyncGUI"
+    screenGui.ResetOnSpawn = false
+    screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    
+    -- Start Button
+    local startButton = Instance.new("TextButton")
+    startButton.Size = UDim2.new(0, 100, 0, 40)
+    startButton.Position = UDim2.new(0, 10, 0, 10)
+    startButton.BackgroundColor3 = Color3.fromRGB(0, 100, 255)
+    startButton.Text = "START"
+    startButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    startButton.TextSize = 18
+    startButton.Font = Enum.Font.GothamBold
+    startButton.BorderSizePixel = 0
+    startButton.Parent = screenGui
+    
+    local startCorner = Instance.new("UICorner")
+    startCorner.CornerRadius = UDim.new(0, 8)
+    startCorner.Parent = startButton
+    
+    screenGui.Parent = game:GetService("CoreGui")
+    return screenGui, startButton
+end
+
+local gui, startBtn = createGUI()
+
+-- First print statement
+print("hello " .. LocalPlayer.DisplayName .. " if ur anti hit aint working anymore press the desync button or press f again ty")
+
+-- Second print statement
+print("TUTORIAL: just press the button then it should work IF IT DOSENT HERES AN TUTORIAL FOR PC NOT MOBILE IT SHOULD WORK IF U PRESS THE BUTTON IM SURE. PRESS F 2x if u dont wanna press the button then it should work too")
+
+pcall(function()
+    PhysicsService:RegisterCollisionGroup("NoCollide")
+    PhysicsService:CollisionGroupSetCollidable("NoCollide", "Default", false)
+end)
+
+local function applyFFlags(enable)
+    pcall(function()
+        if enable then
+            setfflag("WorldStepMax", "-1000000")
+            setfflag("DFIntS2PhysicsSenderRate", "1")
+            setfflag("DFIntAssemblyExtentsExpansionStudHundredth", "1000")
+            setfflag("FFlagRakNetForceUseUnreliable", "True")
+            setfflag("FFlagDebugDisableTelemetryV2Event", "True")
+            setfflag("DFIntNetworkLatencyTolerance", "9999")
+            setfflag("DFIntTaskSchedulerTargetFps", "1")
+            setfflag("DFIntNetworkPhysicsSenderRate", "1")
+            setfflag("DFIntNetworkPhysicsRate", "1")
+            setfflag("DFIntCharacterCollisionUpdateRate", "1")
+            setfflag("DFIntCharacterControllerUpdateRate", "1")
         else
-            applyFFlags(false)
-            setClientOwnership()
-            if serverPosBox then
-                serverPosBox:Destroy()
-                serverPosBox = nil
-            end
-        end
-    end
-
-    -- ONLY USE REMOTE EVENT - NO FLINGING AT ALL
-    local function fireQuantumTeleport()
-        if not Character or not HumanoidRootPart then return end
-        
-        toggleSyncEffects(true)
-        
-        -- Fire the QuantumCloner teleport event
-        local Event = game:GetService("ReplicatedStorage").Packages.Net["RE/QuantumCloner/OnTeleport"]
-        Event:FireServer()
-        
-        print("Fired Cloner Teleport")
-        
-        -- Brief wait for server to process
-        wait(0.3)
-        
-        toggleSyncEffects(false)
-    end
-
-    -- Auto F spam function - Fire remote event FIRST, then 2x desync toggles
-    local function spamF()
-        -- FIRE REMOTE EVENT FIRST
-        local Event = game:GetService("ReplicatedStorage").Packages.Net["RE/QuantumCloner/OnTeleport"]
-        Event:FireServer()
-        print("Fired  teleport event FIRST")
-        wait(0.5)
-        
-        -- Then do the desync toggles
-        for i = 1, 2 do
-            if not DEBOUNCE then
-                DEBOUNCE = true
-                toggleDesync()
-                wait(1)
-                DEBOUNCE = false
-            end
-        end
-    end
-
-    -- Button Connection
-    startBtn.MouseButton1Click:Connect(function()
-        spamF()
-    end)
-
-    RunService.RenderStepped:Connect(function()
-        if not DESYNC_ENABLED or not Character or not HumanoidRootPart then return end
-        Humanoid:ChangeState(Enum.HumanoidStateType.Running)
-        Humanoid.PlatformStand = false
-        for _, part in pairs(Character:GetChildren()) do
-            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-                part.CFrame = HumanoidRootPart.CFrame * CFrame.new(
-                    math.random(-OFFSET_RANGE, OFFSET_RANGE),
-                    math.random(-0.5, 0.5),
-                    math.random(-OFFSET_RANGE, OFFSET_RANGE)
-                )
-            end
-        end
-        
-        -- Update server position box
-        updateServerPosBox()
-    end)
-
-    RunService.Heartbeat:Connect(function()
-        if not DESYNC_ENABLED or not Character or not HumanoidRootPart or not FAKE_POSITION then return end
-        if tick() - lastUpdate >= UPDATE_INTERVAL then
-            pcall(function()
-                local moveOffset = Humanoid.MoveDirection * 0.2
-                local randomOffset = Vector3.new(
-                    math.random(-OFFSET_RANGE/2, OFFSET_RANGE/2),
-                    0,
-                    math.random(-OFFSET_RANGE/2, OFFSET_RANGE/2)
-                )
-                FAKE_POSITION = FAKE_POSITION * CFrame.new(moveOffset + randomOffset)
-                HumanoidRootPart.CFrame = FAKE_POSITION
-            end)
-            lastUpdate = tick()
-        end
-    end)
-
-    UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if gameProcessed or DEBOUNCE or input.KeyCode ~= Enum.KeyCode.F then return end
-        
-        local currentTime = tick()
-        
-        if currentTime - LAST_F_PRESS <= DOUBLE_PRESS_THRESHOLD then
-            if not DEBOUNCE then
-                DEBOUNCE = true
-                fireQuantumTeleport()
-                wait(0.5)
-                DEBOUNCE = false
-            end
-        else
-            if not DEBOUNCE then
-                DEBOUNCE = true
-                toggleDesync()
-                wait(0.3)
-                DEBOUNCE = false
-            end
-        end
-        
-        LAST_F_PRESS = currentTime
-    end)
-
-    LocalPlayer.CharacterAdded:Connect(function(newChar)
-        Character = newChar
-        HumanoidRootPart = newChar:WaitForChild("HumanoidRootPart")
-        Humanoid = newChar:WaitForChild("Humanoid")
-        
-        -- Reapply godmode on respawn
-        if Humanoid then
-            Humanoid.MaxHealth = math.huge
-            Humanoid.Health = math.huge
-            
-            Humanoid:GetPropertyChangedSignal("Health"):Connect(function()
-                Humanoid.Health = math.huge
-            end)
-        end
-        
-        if DESYNC_ENABLED then
-            wait(1)
-            initializeDesync()
-        end
-    end)
-
-    -- Clean up effects when script ends
-    game:GetService("Lighting").ChildRemoved:Connect(function(child)
-        if child.Name == "FlingBlur" then
-            blurEffect = createBlurEffect()
-        end
-    end)
-
-    -- Recreate GUI if removed
-    game:GetService("CoreGui").ChildRemoved:Connect(function(child)
-        if child.Name == "DesyncGUI" then
-            gui, startBtn = createGUI()
-            -- Reconnect button
-            startBtn.MouseButton1Click:Connect(function()
-                spamF()
-            end)
+            setfflag("WorldStepMax", "0")
+            setfflag("DFIntS2PhysicsSenderRate", "60")
+            setfflag("DFIntAssemblyExtentsExpansionStudHundredth", "0")
+            setfflag("DFIntNetworkLatencyTolerance", "100")
+            setfflag("DFIntTaskSchedulerTargetFps", "60")
+            setfflag("DFIntNetworkPhysicsSenderRate", "60")
+            setfflag("DFIntNetworkPhysicsRate", "60")
+            setfflag("DFIntCharacterCollisionUpdateRate", "30")
+            setfflag("DFIntCharacterControllerUpdateRate", "30")
         end
     end)
 end
+
+local function setClientOwnership()
+    for _, part in pairs(Character:GetDescendants()) do
+        if part:IsA("BasePart") then
+            pcall(function()
+                part:SetNetworkOwner(LocalPlayer)
+                part.Anchored = false
+                if DESYNC_ENABLED then
+                    part.CollisionGroup = "NoCollide"
+                    part.CanCollide = false
+                else
+                    part.CollisionGroup = "Default"
+                    part.CanCollide = true
+                end
+            end)
+        end
+    end
+    pcall(function()
+        sethiddenproperty(LocalPlayer, "SimulationRadius", 99999)
+    end)
+end
+
+local function initializeDesync()
+    if HumanoidRootPart then
+        FAKE_POSITION = HumanoidRootPart.CFrame
+        CLIENT_POSITION = HumanoidRootPart.CFrame
+        setClientOwnership()
+        applyFFlags(true)
+        createServerPosBox()
+    end
+end
+
+local function toggleDesync()
+    DESYNC_ENABLED = not DESYNC_ENABLED
+    if DESYNC_ENABLED then
+        initializeDesync()
+    else
+        applyFFlags(false)
+        setClientOwnership()
+        CLIENT_POSITION = nil
+        
+        -- Fix freeze bug
+        pcall(function()
+            Humanoid:ChangeState(Enum.HumanoidStateType.Running)
+            Humanoid.PlatformStand = false
+            Humanoid.Sit = false
+            Humanoid.AutoRotate = true
+        end)
+        
+        if serverPosBox then
+            serverPosBox:Destroy()
+            serverPosBox = nil
+        end
+    end
+end
+
+-- ONLY USE REMOTE EVENT - NO FLINGING AT ALL
+local function fireQuantumTeleport()
+    if not Character or not HumanoidRootPart then return end
+    
+    toggleSyncEffects(true)
+    
+    -- Fire the QuantumCloner teleport event
+    local Event = game:GetService("ReplicatedStorage").Packages.Net["RE/QuantumCloner/OnTeleport"]
+    Event:FireServer()
+    
+    print("Fired QuantumCloner teleport event!")
+    
+    -- Brief wait for server to process
+    wait(0.3)
+    
+    toggleSyncEffects(false)
+end
+
+-- Auto F spam function - Fire remote event FIRST, then 2x desync toggles
+local function spamF()
+    -- FIRE REMOTE EVENT FIRST
+    local Event = game:GetService("ReplicatedStorage").Packages.Net["RE/QuantumCloner/OnTeleport"]
+    Event:FireServer()
+    print("Fired QuantumCloner teleport event FIRST!")
+    wait(0.5)
+    
+    -- Then do the desync toggles
+    for i = 1, 2 do
+        if not DEBOUNCE then
+            DEBOUNCE = true
+            toggleDesync()
+            wait(1)
+            DEBOUNCE = false
+        end
+    end
+end
+
+-- Button Connection
+startBtn.MouseButton1Click:Connect(function()
+    spamF()
+end)
+
+RunService.RenderStepped:Connect(function()
+    if not DESYNC_ENABLED or not Character or not HumanoidRootPart then return end
+    
+    -- Lock you in place on your screen
+    if CLIENT_POSITION then
+        HumanoidRootPart.CFrame = CLIENT_POSITION
+    end
+    
+    -- Fix freeze bug
+    Humanoid:ChangeState(Enum.HumanoidStateType.Running)
+    Humanoid.PlatformStand = false
+    Humanoid.Sit = false
+    Humanoid.AutoRotate = true
+    
+    -- Update server position box
+    updateServerPosBox()
+end)
+
+RunService.Heartbeat:Connect(function()
+    if not DESYNC_ENABLED or not Character or not HumanoidRootPart or not FAKE_POSITION then return end
+    if tick() - lastUpdate >= UPDATE_INTERVAL then
+        pcall(function()
+            local moveOffset = Humanoid.MoveDirection * 0.2
+            local randomOffset = Vector3.new(
+                math.random(-OFFSET_RANGE/2, OFFSET_RANGE/2),
+                0,
+                math.random(-OFFSET_RANGE/2, OFFSET_RANGE/2)
+            )
+            FAKE_POSITION = FAKE_POSITION * CFrame.new(moveOffset + randomOffset)
+            
+            -- Fling body parts for server-side (what others see)
+            for _, part in pairs(Character:GetChildren()) do
+                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                    part.CFrame = FAKE_POSITION * CFrame.new(
+                        math.random(-OFFSET_RANGE, OFFSET_RANGE),
+                        math.random(-0.5, 0.5),
+                        math.random(-OFFSET_RANGE, OFFSET_RANGE)
+                    )
+                end
+            end
+        end)
+        lastUpdate = tick()
+    end
+end)
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed or DEBOUNCE or input.KeyCode ~= Enum.KeyCode.F then return end
+    
+    local currentTime = tick()
+    
+    if currentTime - LAST_F_PRESS <= DOUBLE_PRESS_THRESHOLD then
+        if not DEBOUNCE then
+            DEBOUNCE = true
+            fireQuantumTeleport()
+            wait(0.5)
+            DEBOUNCE = false
+        end
+    else
+        if not DEBOUNCE then
+            DEBOUNCE = true
+            toggleDesync()
+            wait(0.3)
+            DEBOUNCE = false
+        end
+    end
+    
+    LAST_F_PRESS = currentTime
+end)
+
+LocalPlayer.CharacterAdded:Connect(function(newChar)
+    Character = newChar
+    HumanoidRootPart = newChar:WaitForChild("HumanoidRootPart")
+    Humanoid = newChar:WaitForChild("Humanoid")
+    
+    -- Reapply godmode on respawn
+    if Humanoid then
+        Humanoid.MaxHealth = math.huge
+        Humanoid.Health = math.huge
+        
+        Humanoid:GetPropertyChangedSignal("Health"):Connect(function()
+            Humanoid.Health = math.huge
+        end)
+    end
+    
+    if DESYNC_ENABLED then
+        wait(1)
+        initializeDesync()
+    end
+end)
+
+-- Clean up effects when script ends
+game:GetService("Lighting").ChildRemoved:Connect(function(child)
+    if child.Name == "FlingBlur" then
+        blurEffect = createBlurEffect()
+    end
+end)
+
+-- Recreate GUI if removed
+game:GetService("CoreGui").ChildRemoved:Connect(function(child)
+    if child.Name == "DesyncGUI" then
+        gui, startBtn = createGUI()
+        -- Reconnect button
+        startBtn.MouseButton1Click:Connect(function()
+            spamF()
+        end)
+    end
+end)
 
 --// =======================
 
