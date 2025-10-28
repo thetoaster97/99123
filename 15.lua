@@ -1471,7 +1471,6 @@ do
 end
 
 -- =======================
-
 -- DESYNC/ANTI-HIT SCRIPT
 -- =======================
 
@@ -1505,7 +1504,7 @@ local Humanoid = Character:WaitForChild("Humanoid")
 local DESYNC_ENABLED = false
 local FAKE_POSITION = nil
 local CLIENT_POSITION = nil
-local UPDATE_INTERVAL = 0.5 
+local UPDATE_INTERVAL = 1.0 
 local lastUpdate = tick()
 local OFFSET_RANGE = 4 
 local DEBOUNCE = false
@@ -1672,17 +1671,20 @@ local function setClientOwnership()
     for _, part in pairs(Character:GetDescendants()) do
         if part:IsA("BasePart") then
             pcall(function()
-                part:SetNetworkOwner(LocalPlayer)
-                part.Anchored = false
                 if DESYNC_ENABLED then
-                    part.CollisionGroup = "NoCollide"
-                    part.CanCollide = false
+                    -- Don't modify ANY body parts - let them behave normally
+                    -- Desync happens through FFlags, not part manipulation
+                    part.Anchored = false
                 else
+                    part:SetNetworkOwner(LocalPlayer)
+                    part.Anchored = false
                     part.CollisionGroup = "Default"
                     part.CanCollide = true
+                    part.Massless = false
                 end
             end)
         end
+        -- Keep ALL welds and Motor6Ds completely untouched
     end
     pcall(function()
         sethiddenproperty(LocalPlayer, "SimulationRadius", 99999)
@@ -1691,10 +1693,20 @@ end
 
 local function initializeDesync()
     if HumanoidRootPart then
-        FAKE_POSITION = HumanoidRootPart.CFrame
-        CLIENT_POSITION = HumanoidRootPart.CFrame
-        setClientOwnership()
+        -- Set fake position ahead of time without moving anything
+        FAKE_POSITION = HumanoidRootPart.CFrame * CFrame.new(
+            math.random(-OFFSET_RANGE, OFFSET_RANGE),
+            0,
+            math.random(-OFFSET_RANGE, OFFSET_RANGE)
+        )
+        CLIENT_POSITION = nil -- Don't lock position
+        
+        -- Apply FFlags first before touching any parts
         applyFFlags(true)
+        wait(0.1)
+        
+        -- Then gently adjust ownership without forcing positions
+        setClientOwnership()
         createServerPosBox()
     end
 end
@@ -1768,16 +1780,12 @@ end)
 RunService.RenderStepped:Connect(function()
     if not DESYNC_ENABLED or not Character or not HumanoidRootPart then return end
     
-    -- Lock you in place on your screen
-    if CLIENT_POSITION then
-        HumanoidRootPart.CFrame = CLIENT_POSITION
-    end
-    
-    -- Fix freeze bug
-    Humanoid:ChangeState(Enum.HumanoidStateType.Running)
-    Humanoid.PlatformStand = false
-    Humanoid.Sit = false
-    Humanoid.AutoRotate = true
+    -- Minimal interference - just keep character responsive
+    pcall(function()
+        Humanoid.PlatformStand = false
+        Humanoid.Sit = false
+        HumanoidRootPart.Anchored = false
+    end)
     
     -- Update server position box
     updateServerPosBox()
@@ -1787,27 +1795,38 @@ RunService.Heartbeat:Connect(function()
     if not DESYNC_ENABLED or not Character or not HumanoidRootPart or not FAKE_POSITION then return end
     if tick() - lastUpdate >= UPDATE_INTERVAL then
         pcall(function()
-            local moveOffset = Humanoid.MoveDirection * 0.2
-            local randomOffset = Vector3.new(
-                math.random(-OFFSET_RANGE/2, OFFSET_RANGE/2),
-                0,
-                math.random(-OFFSET_RANGE/2, OFFSET_RANGE/2)
-            )
-            FAKE_POSITION = FAKE_POSITION * CFrame.new(moveOffset + randomOffset)
+            -- Update fake position to follow player smoothly
+            local currentPos = HumanoidRootPart.Position
+            local distance = (currentPos - FAKE_POSITION.Position).Magnitude
             
-            -- Fling body parts for server-side (what others see)
-            for _, part in pairs(Character:GetChildren()) do
-                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-                    part.CFrame = FAKE_POSITION * CFrame.new(
-                        math.random(-OFFSET_RANGE, OFFSET_RANGE),
-                        math.random(-0.5, 0.5),
-                        math.random(-OFFSET_RANGE, OFFSET_RANGE)
-                    )
-                end
+            -- Keep fake position closer and update less frequently
+            if distance > OFFSET_RANGE * 3 then
+                FAKE_POSITION = CFrame.new(currentPos) * CFrame.new(
+                    math.random(-OFFSET_RANGE, OFFSET_RANGE),
+                    0,
+                    math.random(-OFFSET_RANGE, OFFSET_RANGE)
+                )
             end
+            
+            -- DON'T move any body parts at all - let desync happen naturally through FFlags
+            -- Only visual indicator (server box) shows the desync
         end)
         lastUpdate = tick()
     end
+end)
+
+-- Monitor for new parts/welds being added
+Character.DescendantAdded:Connect(function(descendant)
+    if not DESYNC_ENABLED then return end
+    
+    task.wait(0.1)
+    
+    pcall(function()
+        if descendant:IsA("BasePart") then
+            descendant.Anchored = false
+        end
+        -- Don't disable any welds or constraints
+    end)
 end)
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
