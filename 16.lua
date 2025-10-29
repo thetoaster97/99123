@@ -441,7 +441,7 @@ if player.Character then updateCharacter() end
 --- =======================
 -- AUTO-RELOAD ON TELEPORT (Lean & Session-Only)
 -- =======================
-local ADMIN_RAW_URL = "https://raw.githubusercontent.com/thetoaster97/99123/refs/heads/main/15.lua" -- replace with your raw script URL
+local ADMIN_RAW_URL = "https://raw.githubusercontent.com/thetoaster97/99123/refs/heads/main/16.lua" -- replace with your raw script URL
 -- Use a session-only flag so it only queues if you already executed this session
 if shared._AutoReloadQueued then
     return -- already queued this session, do nothing
@@ -2444,3 +2444,243 @@ do
         end
     end)
 end
+
+--// =======================
+--// LOCKED TOOL BUTTON (Top-Left)
+--// =======================
+do
+    local player = game:GetService("Players").LocalPlayer
+    local playerGui = player:WaitForChild("PlayerGui")
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local RunService = game:GetService("RunService")
+    local TOOL_NAME = "All Seeing Sentry"
+    local Event = ReplicatedStorage:WaitForChild("Packages"):WaitForChild("Net"):WaitForChild("RE/UseItem")
+
+    local screenGui = Instance.new("ScreenGui", playerGui)
+    local button = Instance.new("TextButton")
+    button.Size = UDim2.new(0, 150, 0, 35)
+    button.Position = UDim2.new(0, 140, 0, 20) -- top-left, slightly right
+    button.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    button.Font = Enum.Font.SourceSansBold
+    button.TextSize = 16
+    button.Text = "Defense"
+    button.Parent = screenGui
+    button.AutoButtonColor = true
+    button.MouseEnter:Connect(function() button.BackgroundColor3 = Color3.fromRGB(60, 60, 60) end)
+    button.MouseLeave:Connect(function() button.BackgroundColor3 = Color3.fromRGB(40, 40, 40) end)
+
+    local lockedTool = nil
+    local lockEnabled = false
+    local active = false
+
+    local function equipTool()
+        local character = player.Character
+        if not character then return end
+        local humanoid = character:FindFirstChild("Humanoid")
+        if not humanoid then return end
+
+        local tool = character:FindFirstChild(TOOL_NAME) or player.Backpack:FindFirstChild(TOOL_NAME)
+        if tool then
+            tool.Parent = character
+            humanoid:EquipTool(tool)
+            lockedTool = tool
+            lockEnabled = true
+        end
+    end
+
+    local function forceEquipLoop()
+        spawn(function()
+            while active and lockedTool do
+                local humanoid = player.Character and player.Character:FindFirstChild("Humanoid")
+                if humanoid and humanoid:FindFirstChildOfClass("Tool") ~= lockedTool then
+                    lockedTool.Parent = player.Character
+                    humanoid:EquipTool(lockedTool)
+                end
+                task.wait(0.01)
+            end
+        end)
+    end
+
+    local function monitorSentry()
+        local conn
+        conn = workspace.ChildAdded:Connect(function(child)
+            if child.Name == "Sentry_"..player.UserId then
+                active = false
+                lockEnabled = false
+                lockedTool = nil
+                button.Text = "Defense"
+                conn:Disconnect()
+            end
+        end)
+    end
+
+    local function startAutoUse()
+        active = true
+        equipTool()
+        monitorSentry()
+        forceEquipLoop()
+
+        spawn(function()
+            while active do
+                Event:FireServer()
+                task.wait(0)
+            end
+        end)
+    end
+
+    button.MouseButton1Click:Connect(function()
+        if not active then
+            button.Text = "Running..."
+            startAutoUse()
+        else
+            active = false
+            lockEnabled = false
+            lockedTool = nil
+            button.Text = "Defense"
+        end
+    end)
+end
+
+-- =======================
+--// SENTRY PULL & BAT SWING
+-- =======================
+do
+    local Players = game:GetService("Players")
+    local RunService = game:GetService("RunService")
+    local player = Players.LocalPlayer
+    local character = player.Character or player.CharacterAdded:Wait()
+    local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+
+    local handledSentries = {}
+    local distanceInFront = 6
+    local activeSentry
+    local swinging = false
+    local followConnection
+
+    -- Find one unhandled sentry
+    local function findSentry()
+        for _, obj in pairs(workspace:GetDescendants()) do
+            if obj.Name:lower():match("^sentry_") and (obj:IsA("BasePart") or obj:IsA("Model")) then
+                if not handledSentries[obj] then
+                    return obj
+                end
+            end
+        end
+        return nil
+    end
+
+    -- Disable sentry scripts
+    local function disableSentryTargeting(sentry)
+        for _, scr in pairs(sentry:GetDescendants()) do
+            if scr:IsA("Script") or scr:IsA("LocalScript") then
+                scr.Disabled = true
+            end
+        end
+    end
+
+    -- Make sentry parts non-collidable
+    local function makeNonCollidable(sentry)
+        for _, part in pairs(sentry:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = false
+            end
+        end
+    end
+
+    -- Equip Bat and swing once (non-blocking)
+    local function equipAndSwingBat()
+        if swinging then return end
+        swinging = true
+
+        spawn(function()
+            local backpack = player:FindFirstChildOfClass("Backpack")
+            local humanoid = character:FindFirstChildOfClass("Humanoid")
+            if not (backpack and humanoid) then 
+                swinging = false 
+                return 
+            end
+
+            local bat = backpack:FindFirstChild("Bat") or character:FindFirstChild("Bat")
+            if bat then
+                humanoid:EquipTool(bat)
+                task.wait(0.15)
+                if bat.Activate then bat:Activate() end
+                task.wait(0.9) -- allow swing to register
+                humanoid:UnequipTools()
+            end
+
+            swinging = false
+        end)
+    end
+
+    -- Wait for 60s label
+    local function waitFor60sLabel(sentry)
+        local timeout, elapsed = 10, 0
+        while elapsed < timeout and sentry.Parent do
+            for _, d in pairs(sentry:GetDescendants()) do
+                if d:IsA("TextLabel") or d:IsA("TextButton") then
+                    local txt = string.lower(d.Text or "")
+                    if txt:find("60s") then
+                        return true
+                    end
+                end
+            end
+            task.wait(0.3)
+            elapsed += 0.3
+        end
+        return false
+    end
+
+    -- Pull sentry to player and follow perfectly
+    local function pullSentryToPlayer(sentry)
+        if not (sentry and humanoidRootPart) then return end
+
+        activeSentry = sentry
+        makeNonCollidable(sentry)
+
+        -- instant first position
+        local frontCFrame = humanoidRootPart.CFrame * CFrame.new(0, 0, -distanceInFront)
+        if sentry:IsA("Model") and sentry.PrimaryPart then
+            sentry:SetPrimaryPartCFrame(frontCFrame)
+        elseif sentry:IsA("BasePart") then
+            sentry.CFrame = frontCFrame
+        end
+
+        -- swing bat immediately (non-blocking)
+        equipAndSwingBat()
+
+        -- follow sentry every frame
+        if followConnection then followConnection:Disconnect() end
+        followConnection = RunService.RenderStepped:Connect(function()
+            if not activeSentry or not activeSentry.Parent or not humanoidRootPart.Parent then
+                if followConnection then followConnection:Disconnect() end
+                return
+            end
+
+            local targetCFrame = humanoidRootPart.CFrame * CFrame.new(0, 0, -distanceInFront)
+            if activeSentry:IsA("Model") and activeSentry.PrimaryPart then
+                activeSentry:SetPrimaryPartCFrame(targetCFrame)
+            elseif activeSentry:IsA("BasePart") then
+                activeSentry.CFrame = targetCFrame
+            end
+        end)
+    end
+
+    -- Main loop
+    task.spawn(function()
+        while true do
+            local sentry = findSentry()
+            if sentry then
+                handledSentries[sentry] = true
+                disableSentryTargeting(sentry)
+
+                if waitFor60sLabel(sentry) then
+                    pullSentryToPlayer(sentry)
+                end
+            end
+            task.wait(0.4)
+        end
+    end)
+end
+
