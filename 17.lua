@@ -722,7 +722,7 @@ stripVisualItems(player.Character)
 
 
 --// =======================
---// GHOST PLAYERS / SENTRY / TRAP HANDLER
+--// GHOST PLAYERS / TRAP HANDLER
 --// =======================
 
 local Players   = game:GetService("Players")
@@ -734,7 +734,6 @@ local task      = task
 local tracked = {
     others = setmetatable({}, { __mode = "k" }),
     localp = setmetatable({}, { __mode = "k" }),
-    sentry = setmetatable({}, { __mode = "k" }),
     trap   = setmetatable({}, { __mode = "k" }),
 }
 local conns = setmetatable({}, { __mode = "k" })
@@ -763,12 +762,6 @@ local function applyLocalSettings(part)
     -- Don't modify CanTouch - leave it as default (true)
 end
 
-local function applySentrySettings(part)
-    safeSet(part, "CanCollide", true)
-    safeSet(part, "CanQuery",   false)
-    safeSet(part, "CanTouch",   true)
-end
-
 local function applyTrapSettings(part)
     safeSet(part, "CanCollide", false)
     safeSet(part, "CanQuery",   false)
@@ -785,7 +778,6 @@ local function stopWatching(part)
     end
     tracked.others[part] = nil
     tracked.localp[part] = nil
-    tracked.sentry[part] = nil
     tracked.trap[part] = nil
 end
 
@@ -800,9 +792,6 @@ local function watchPart(part, category)
     elseif category == "local" then 
         tracked.localp[part] = true 
         applyLocalSettings(part)
-    elseif category == "sentry" then 
-        tracked.sentry[part] = true 
-        applySentrySettings(part)
     elseif category == "trap" then 
         tracked.trap[part] = true 
         applyTrapSettings(part) 
@@ -814,8 +803,6 @@ local function watchPart(part, category)
         props = {"CanCollide","CanQuery","CanTouch"}
     elseif category == "local" then 
         props = {"CanQuery"} -- Removed CanTouch from monitoring
-    elseif category == "sentry" then 
-        props = {"CanCollide","CanQuery"}
     elseif category == "trap" then 
         props = {"CanCollide","CanQuery","CanTouch"} 
     end
@@ -828,7 +815,6 @@ local function watchPart(part, category)
                     if not part or not part.Parent then return end
                     if category == "others" then applyOtherSettings(part)
                     elseif category == "local" then applyLocalSettings(part)
-                    elseif category == "sentry" then applySentrySettings(part)
                     elseif category == "trap"   then applyTrapSettings(part) end
                 end)
             end))
@@ -877,13 +863,11 @@ end
 if LocalPlayer.Character then onLocalCharacter(LocalPlayer.Character) end
 LocalPlayer.CharacterAdded:Connect(onLocalCharacter)
 
--- Workspace sentries/traps
+-- Workspace traps
 local function processWorkspacePart(p)
     if not p:IsA("BasePart") then return end
     local name = (p.Name or ""):lower()
-    if name:find("sentry") then
-        watchPart(p, "sentry")
-    elseif name:find("trap") then
+    if name:find("trap") then
         watchPart(p, "trap")
     end
 end
@@ -901,14 +885,12 @@ task.spawn(function()
         for part in pairs(tracked.localp) do 
             if part and part.Parent then applyLocalSettings(part) end 
         end
-        for part in pairs(tracked.sentry) do 
-            if part and part.Parent then applySentrySettings(part) end 
-        end
         for part in pairs(tracked.trap) do 
             if part and part.Parent then applyTrapSettings(part) end 
         end
     end
 end)
+
 
 --// =======================
 --// GRAPPLE-HOOK SPEED 
