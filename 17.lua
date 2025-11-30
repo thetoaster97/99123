@@ -609,8 +609,16 @@ end)
 -- REMOVE ALL CLOTHES & ACCESSORIES (merged)
 --------------------------------------------------------------------
 -- Function to strip clothing/accessories from a character
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+
+-- Debounce table to prevent rapid tool equip spam
+local equipDebounce = {}
+local EQUIP_COOLDOWN = 0.5 -- seconds between tool equips
+
 local function stripVisualItems(character)
     if not character then return end
+    
     for _, item in ipairs(character:GetChildren()) do
         if item:IsA("Accessory")
             or item:IsA("Clothing")
@@ -623,19 +631,54 @@ local function stripVisualItems(character)
         end
     end
 end
+
+local function setupAntiLag(character)
+    if not character then return end
+    
+    local humanoid = character:WaitForChild("Humanoid", 5)
+    if not humanoid then return end
+    
+    -- Anti tool spam
+    humanoid.ChildAdded:Connect(function(child)
+        if child:IsA("Tool") then
+            local userId = Players:GetPlayerFromCharacter(character).UserId
+            local currentTime = tick()
+            
+            if equipDebounce[userId] and (currentTime - equipDebounce[userId]) < EQUIP_COOLDOWN then
+                child:Destroy()
+                return
+            end
+            
+            equipDebounce[userId] = currentTime
+        end
+    end)
+end
+
+local function handleCharacter(character)
+    stripVisualItems(character)
+    setupAntiLag(character)
+end
+
 -- Remove from every player already in game
 for _, plr in ipairs(Players:GetPlayers()) do
-    stripVisualItems(plr.Character)
+    if plr.Character then
+        handleCharacter(plr.Character)
+    end
+    
+    -- Handle their future respawns
+    plr.CharacterAdded:Connect(handleCharacter)
 end
--- Handle players that join later
-Players.PlayerAdded:Connect(function(plr)
-    plr.CharacterAdded:Connect(stripVisualItems)
-end)
--- Handle your own respawn
-player.CharacterAdded:Connect(stripVisualItems)
--- Initial clean-up for your own character
-stripVisualItems(player.Character)
 
+-- Handle new players that join
+Players.PlayerAdded:Connect(function(plr)
+    plr.CharacterAdded:Connect(handleCharacter)
+end)
+
+-- Handle your own character (initial and respawns)
+if player.Character then
+    handleCharacter(player.Character)
+end
+player.CharacterAdded:Connect(handleCharacter)
 
 --// =======================
 --// GHOST PLAYERS / TRAP HANDLER
