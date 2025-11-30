@@ -2873,7 +2873,7 @@ local humanoid = character:WaitForChild("Humanoid")
 local rootPart = character:WaitForChild("HumanoidRootPart")
 
 -- Speed multiplier
-local SPEED_MULTIPLIER = 1.5
+local SPEED_MULTIPLIER = 1.3
 
 -- Anti-rubberband settings
 local lastPosition = rootPart.Position
