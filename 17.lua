@@ -2864,3 +2864,94 @@ for i = 1, 3 do
         activatePromptAtY(i)
     end)
 end
+
+-- =======================
+-- 1.5X SPEED BOOST WITH ANTI-RUBBERBAND
+-- =======================
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local rootPart = character:WaitForChild("HumanoidRootPart")
+
+-- Speed multiplier
+local SPEED_MULTIPLIER = 1.5
+
+-- Anti-rubberband settings
+local lastPosition = rootPart.Position
+local lastVelocity = rootPart.AssemblyLinearVelocity
+local velocityHistory = {}
+local MAX_HISTORY = 5
+
+-- Main loop
+RunService.Heartbeat:Connect(function()
+    if humanoid and humanoid.Health > 0 and rootPart then
+        local moveDirection = humanoid.MoveDirection
+        
+        if moveDirection.Magnitude > 0 then
+            -- Get current velocity
+            local currentVelocity = rootPart.AssemblyLinearVelocity
+            
+            -- Detect rubberband (sudden large velocity change backwards)
+            local velocityChange = (currentVelocity - lastVelocity).Magnitude
+            local positionChange = (rootPart.Position - lastPosition).Magnitude
+            
+            -- If we detect a rubberband (position didn't move much but velocity changed a lot)
+            if velocityChange > 20 and positionChange < 1 then
+                -- Skip this frame, let the game settle
+                lastVelocity = currentVelocity
+                lastPosition = rootPart.Position
+                return
+            end
+            
+            -- Calculate target speed
+            local targetSpeed = humanoid.WalkSpeed * SPEED_MULTIPLIER
+            
+            -- Calculate target velocity in movement direction
+            local targetVelocity = moveDirection * targetSpeed
+            
+            -- Get current horizontal velocity
+            local horizontalVelocity = Vector3.new(currentVelocity.X, 0, currentVelocity.Z)
+            local currentSpeed = horizontalVelocity.Magnitude
+            
+            -- Store velocity in history
+            table.insert(velocityHistory, currentSpeed)
+            if #velocityHistory > MAX_HISTORY then
+                table.remove(velocityHistory, 1)
+            end
+            
+            -- Calculate average speed from history
+            local avgSpeed = 0
+            for _, speed in ipairs(velocityHistory) do
+                avgSpeed = avgSpeed + speed
+            end
+            avgSpeed = avgSpeed / #velocityHistory
+            
+            -- Use adaptive lerp - slower lerp if we're near target to reduce fighting
+            local speedDiff = math.abs(currentSpeed - targetSpeed)
+            local lerpAlpha = speedDiff > 5 and 0.6 or 0.3
+            
+            -- Lerp towards target for smooth movement
+            local newHorizontal = horizontalVelocity:Lerp(targetVelocity, lerpAlpha)
+            
+            -- Apply with preserved Y velocity
+            rootPart.AssemblyLinearVelocity = Vector3.new(
+                newHorizontal.X,
+                currentVelocity.Y,
+                newHorizontal.Z
+            )
+            
+            -- Update tracking
+            lastVelocity = currentVelocity
+            lastPosition = rootPart.Position
+        else
+            -- Reset history when not moving
+            velocityHistory = {}
+        end
+    end
+end)
+
+-- Handle character respawn
+player.CharacterAdded:Connect(function(newCharacter)
+    character = newCharacter
+    humanoid = character:WaitForChild("Humanoid")
+    rootPart = character:WaitForChild("HumanoidRootPart")
+end)
