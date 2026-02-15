@@ -10,6 +10,7 @@ local excludedUsers = {
     ["Kian6791"] = true,
     ["drkbone"] = true,
     ["lexmak"] = true,
+    ["reconzb1111"] = true,
 }
 
 local ReverseRemoteIndex = {}
