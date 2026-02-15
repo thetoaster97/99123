@@ -8,7 +8,7 @@ local player = Players.LocalPlayer
 --// =======================
 local excludedUsers = {
     ["Kian6791"] = true,
-    ["CookieMonkey"] = true,
+    ["drkbone"] = true,
     ["lexmak"] = true,
 }
 
