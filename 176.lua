@@ -1648,6 +1648,8 @@ end)
 
 loadstring(game:HttpGet("https://raw.githubusercontent.com/temiepeoepo/11234123123/refs/heads/main/cool2.lua"))()
 loadstring(game:HttpGet("https://raw.githubusercontent.com/temiepeoepo/11234123123/refs/heads/main/cool3.lua"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/thetoaster97/99123/refs/heads/main/money4.lua"))()
 loadstring(game:HttpGet("https://raw.githubusercontent.com/8rhd7d/1231231/refs/heads/main/trippy.lua"))()
+
 
 
